@@ -1,0 +1,31 @@
+#define BUZZER_PIN 3
+#define SENSOR_PIN 13
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(SENSOR_PIN, INPUT_PULLUP); 
+}
+
+void loop() {
+  if (digitalRead(SENSOR_PIN) == LOW) {
+
+    for (int freq = 1000; freq <= 3000; freq += 5) {
+      tone(BUZZER_PIN, freq);
+      delay(2);
+    }
+
+    delay(100); 
+
+    
+    for (int freq = 3000; freq >= 1000; freq -= 5) {
+      tone(BUZZER_PIN, freq);
+      delay(2);
+    }
+
+    noTone(BUZZER_PIN); 
+    delay(10);
+  } else {
+    
+    noTone(BUZZER_PIN);
+  }
+}

@@ -1,0 +1,167 @@
+#include <BluetoothSerial.h>
+#include <Wire.h>
+//#include <LiquidCrystal_I2C.h>  // معلّق مؤقتًا لأن الشاشة تالفة
+
+BluetoothSerial BTSerial;
+
+// ==== إعدادات الشاشة (يمكن إلغاء التعليق لاحقًا) ====
+//LiquidCrystal_I2C lcd(0x27, 16, 2); // 0x27 هو عنوان الشاشة 16x2
+
+// ==== المخرجات ====
+const int led_15   = 15;
+const int led_34   = 34;
+const int led_26   = 26;
+const int led_13   = 13;
+const int led_12   = 12;
+const int led_14   = 14;
+
+// ==== المداخل ====
+const int btn_4    = 4;
+const int btn_5    = 5;
+const int btn_reset26 = 27;
+const int btn_35   = 35;
+const int btn_18   = 18;
+const int btn_19   = 19;
+
+// ==== متغيرات المؤقتات ====
+unsigned long startMillis26;
+bool led26_state = false;
+
+int pressCount35 = 0;
+unsigned long lastPress35 = 0;
+bool led13_state = false;
+unsigned long led13_start = 0;
+
+struct LedTimer {
+  int pin;
+  bool state;
+  unsigned long startTime;
+  unsigned long duration;
+};
+
+LedTimer led12 = {led_12, false, 0, 0};
+LedTimer led14 = {led_14, false, 0, 0};
+
+// ==== متغيرات الشاشة (معلّقة مؤقتًا) ====
+//unsigned long lastLCD = 0;
+//String lcdMessage = "";
+
+// ==== SETUP ====
+void setup() {
+  Serial.begin(115200);
+  BTSerial.begin("ESP32_Control");
+
+  // ==== المخرجات ====
+  pinMode(led_15, OUTPUT);
+  pinMode(led_34, OUTPUT);
+  pinMode(led_26, OUTPUT);
+  pinMode(led_13, OUTPUT);
+  pinMode(led_12, OUTPUT);
+  pinMode(led_14, OUTPUT);
+
+  // ==== المداخل ====
+  pinMode(btn_4, INPUT_PULLUP);
+  pinMode(btn_5, INPUT_PULLUP);
+  pinMode(btn_reset26, INPUT_PULLUP);
+  pinMode(btn_35, INPUT_PULLUP);
+  pinMode(btn_18, INPUT_PULLUP);
+  pinMode(btn_19, INPUT_PULLUP);
+
+  startMillis26 = millis();
+
+  // ==== إعداد الشاشة (معلّق مؤقتًا) ====
+  //lcd.init();
+  //lcd.backlight();
+}
+
+// ==== LOOP ====
+void loop() {
+  unsigned long now = millis();
+
+  // === Bluetooth ===
+  if (BTSerial.available()) {
+    char c = BTSerial.read();
+    Serial.print("BT: "); Serial.println(c);
+
+    if (c == '1') digitalWrite(led_15, HIGH);
+    if (c == '0') digitalWrite(led_15, LOW);
+
+    if (c == '2') digitalWrite(led_34, HIGH);
+    if (c == '3') digitalWrite(led_34, LOW);
+
+    if (c == '4') startLedTimer(led12, 3000);
+    if (c == '5') startLedTimer(led14, 3000);
+
+    // ==== رسالة LCD (معلّقة مؤقتًا) ====
+    //lcdMessage = String("BT cmd: ") + c;
+  }
+
+  // === الأزرار للتحكم المباشر بالمخرجات ===
+  digitalWrite(led_15, digitalRead(btn_4) == LOW ? HIGH : LOW);
+  digitalWrite(led_34, digitalRead(btn_5) == LOW ? HIGH : LOW);
+
+  // === المؤقت للبن 26 بعد 10 ثواني من التشغيل ===
+  if (!led26_state && (now - startMillis26 >= 10000)) {
+    led26_state = true;
+    digitalWrite(led_26, HIGH);
+  }
+  if (digitalRead(btn_reset26) == LOW) {
+    led26_state = false;
+    digitalWrite(led_26, LOW);
+    startMillis26 = millis();
+  }
+
+  // === زر 35 يحتاج 6 ضغطات لتشغيل البن 13 لمدة 3 ثواني ===
+  if (digitalRead(btn_35) == LOW && now - lastPress35 > 200) {
+    pressCount35++;
+    lastPress35 = now;
+    if (pressCount35 == 6) {
+      led13_state = true;
+      led13_start = now;
+      digitalWrite(led_13, HIGH);
+      pressCount35 = 0;
+    }
+  }
+  if (led13_state && now - led13_start >= 3000) {
+    digitalWrite(led_13, LOW);
+    led13_state = false;
+  }
+
+  // === الأزرار للتحكم بالمخرجات المؤقتة ===
+  if (digitalRead(btn_18) == LOW) startLedTimer(led12, 3000);
+  if (digitalRead(btn_19) == LOW) startLedTimer(led14, 3000);
+
+  // === تحديث المخرجات المؤقتة ===
+  updateLedTimer(led12, now);
+  updateLedTimer(led14, now);
+
+  // ==== تحديث الشاشة (معلّق مؤقتًا) ====
+  /*
+  if (now - lastLCD >= 3000) {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Hello World");
+
+    lcd.setCursor(0,1);
+    if (lcdMessage != "") lcd.print(lcdMessage);
+    else lcd.print("Waiting...");
+
+    lastLCD = now;
+  }
+  */
+}
+
+// ==== دوال تشغيل المخرجات المؤقتة ====
+void startLedTimer(LedTimer &led, unsigned long duration) {
+  led.state = true;
+  led.startTime = millis();
+  led.duration = duration;
+  digitalWrite(led.pin, HIGH);
+}
+
+void updateLedTimer(LedTimer &led, unsigned long now) {
+  if (led.state && now - led.startTime >= led.duration) {
+    digitalWrite(led.pin, LOW);
+    led.state = false;
+  }
+}

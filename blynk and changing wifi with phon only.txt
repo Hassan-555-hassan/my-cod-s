@@ -1,0 +1,100 @@
+#define BLYNK_PRINT Serial
+#define BLYNK_TEMPLATE_ID "TMPL6u8a1NgiV"
+#define BLYNK_TEMPLATE_NAME "ESP32 Test"
+#define BLYNK_AUTH_TOKEN "pd8nqtc6GZ9d4eNgjLs3Z5tJdVodVt-U"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <WiFiManager.h>
+#include <Preferences.h>
+
+#define RESET_BUTTON 33
+#define MAX_OUTPUTS 16 
+
+WiFiManager wm;
+Preferences prefs;
+BlynkTimer timer;
+
+int outputCount = 4;
+int outputPins[MAX_OUTPUTS] = {2, 4, 5, 18, 19, 21, 22, 23, 25, 26, 27, 32, 12, 13, 14, 15};
+
+BLYNK_CONNECTED() {
+  Serial.println("Connected to Blynk. Syncing states...");
+  Blynk.syncAll();
+}
+
+BLYNK_WRITE_DEFAULT() {
+  int vPin = request.pin;
+  int value = param.asInt();
+
+  if (vPin >= 0 && vPin < outputCount) {
+    digitalWrite(outputPins[vPin], value);
+    Serial.printf("V%d -> Pin %d = %s\n", vPin, outputPins[vPin], value ? "ON" : "OFF");
+  }
+}
+
+void checkConnection() {
+  if (WiFi.status() == WL_CONNECTED && !Blynk.connected()) {
+    Blynk.connect();
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RESET_BUTTON, INPUT_PULLUP);
+
+  prefs.begin("config", true);
+  outputCount = prefs.getInt("outputs", 4);
+  prefs.end();
+
+  for (int i = 0; i < MAX_OUTPUTS; i++) {
+    pinMode(outputPins[i], OUTPUT);
+    digitalWrite(outputPins[i], LOW);
+  }
+
+  char outStr[4];
+  sprintf(outStr, "%d", outputCount);
+  WiFiManagerParameter custom_outputs("outputs", "Number of devices (1-16)", outStr, 4);
+  wm.addParameter(&custom_outputs);
+
+  wm.setConfigPortalTimeout(180);
+  if (!wm.autoConnect("ESP32_Smart_Control")) {
+    Serial.println("Failed to connect. Running offline.");
+  }
+
+  int newOut = atoi(custom_outputs.getValue());
+  if (newOut != outputCount && newOut >= 1 && newOut <= MAX_OUTPUTS) {
+    prefs.begin("config", false);
+    prefs.putInt("outputs", newOut);
+    prefs.end();
+    Serial.println("Settings saved successfully!");
+    ESP.restart();
+  }
+
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  Blynk.connect();
+
+  timer.setInterval(15000L, checkConnection);
+}
+
+void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    Blynk.run();
+  }
+  timer.run();
+
+  if (digitalRead(RESET_BUTTON) == LOW) {
+    unsigned long startTime = millis();
+    while (digitalRead(RESET_BUTTON) == LOW) {
+      if (millis() - startTime > 3000) {
+        Serial.println("Resetting WiFi and settings...");
+        wm.resetSettings();
+        prefs.begin("config", false);
+        prefs.clear();
+        prefs.end();
+        delay(500);
+        ESP.restart();
+      }
+    }
+  }
+}

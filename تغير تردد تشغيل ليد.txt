@@ -1,0 +1,39 @@
+// Arduino Frequency Generator
+// Hassan Edition 😉
+
+const int ledPin = 3;   // المخرج: الطرف 3
+const long freq = 40000; // <<--- عدّل هنا التردد المطلوب (10 أو 40000)
+
+// ------------------------------------------------
+void setup() {
+  pinMode(ledPin, OUTPUT);
+
+  if (freq < 1000) {
+    // للترددات البطيئة مثل 10Hz نستخدم delay
+  } else {
+    // للترددات العالية مثل 40kHz نستخدم PWM مع Timer2
+    setup40kHzPWM();
+  }
+}
+
+void loop() {
+  if (freq < 1000) {
+    // تشغيل LED يدوي بتردد منخفض (10Hz)
+    digitalWrite(ledPin, HIGH);
+    delay(1000 / (freq * 2)); // نصف الدورة
+    digitalWrite(ledPin, LOW);
+    delay(1000 / (freq * 2));
+  }
+  // إذا كان freq = 40000 فلا داعي لأي شيء في loop
+}
+
+// ------------------------------------------------
+// دالة تهيئة PWM على 40kHz
+void setup40kHzPWM() {
+  // Timer2 على الطرف 3
+  TCCR2A = _BV(COM2B0) | _BV(WGM21) | _BV(WGM20);
+  TCCR2B = _BV(WGM22) | _BV(CS20);
+
+  OCR2A = 199;   // TOP = 199 → تردد ≈ 40kHz
+  OCR2B = 100;   // duty cycle = 50%
+}

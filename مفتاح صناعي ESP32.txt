@@ -1,0 +1,62 @@
+#include <BluetoothSerial.h>
+
+BluetoothSerial BTSerial;
+
+const int pins[] = {2, 5, 12, 14, 15, 18, 19, 23, 25, 26, 27, 32, 33};
+const int pinCount = sizeof(pins) / sizeof(pins[0]);
+
+// نخزن وقت تشغيل كل مخرج
+unsigned long pinOnTime[20]; 
+bool pinState[20]; 
+
+void setup() {
+  Serial.begin(115200);
+  BTSerial.begin("ESP32_Light_Control");
+
+  for (int i = 0; i < pinCount; i++) {
+    pinMode(pins[i], OUTPUT);
+    digitalWrite(pins[i], LOW);
+    pinOnTime[i] = 0;
+    pinState[i] = false;
+  }
+
+  Serial.println("Bluetooth is ready to connect...");
+}
+
+void loop() {
+  if (BTSerial.available()) {
+    char received = BTSerial.read();
+    Serial.print("Received: ");
+    Serial.println(received);
+
+    int pinIndex = -1;
+
+   switch (received) {
+  case '1': pinIndex = 0; break; // pin2
+  case '2': pinIndex = 1; break; // pin5
+  case '3': pinIndex = 2; break; // pin12
+  case '4': pinIndex = 3; break; // pin14
+  case '5': pinIndex = 4; break; // pin15
+  case '6': pinIndex = 5; break; // pin18
+  case '7': pinIndex = 6; break; // pin19
+  case '8': pinIndex = 7; break; // pin23
+  case '9': pinIndex = 8; break; // pin25
+  case '0': pinIndex = 9; break; // pin26
+}
+
+
+    if (pinIndex != -1) {
+      digitalWrite(pins[pinIndex], HIGH);
+      pinState[pinIndex] = true;
+      pinOnTime[pinIndex] = millis();
+    }
+  }
+
+  // إيقاف المخارج بعد ثانيتين
+  for (int i = 0; i < pinCount; i++) {
+    if (pinState[i] && millis() - pinOnTime[i] >= 2000) {
+      digitalWrite(pins[i], LOW);
+      pinState[i] = false;
+    }
+  }
+}

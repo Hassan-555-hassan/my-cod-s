@@ -1,0 +1,162 @@
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <MPU6050.h>
+
+BluetoothSerial SerialBT;
+MPU6050 mpu;
+
+// تعريف أطراف المصابيح
+const int ledPin13 = 13;  // LED 13 (يعمل بالجيروسكوب والأزرار)
+const int ledPin14 = 14;  // LED 14 (يعمل بالأزرار)
+const int ledPin26 = 26;  // LED 26 (يعمل بالأزرار)
+int brightness13 = 0;
+int brightness14 = 0;
+int brightness26 = 0;
+const int step = 25;
+const int maxBrightness = 255;
+
+// معاملات PID
+float Kp = 15.0, Ki = 0.5, Kd = 1.0;
+float error, lastError, integral, derivative, output;
+float targetAngle = 0.0;     // الزاوية المطلوبة للتوازن
+float angleOffset = -5.0;    // تعويض ميل الحساس
+
+// التحكم بالسرعة
+int baseSpeed = 180;  // السرعة الأساسية
+int maxSpeed = 255;   // الحد الأقصى للسرعة
+int minSpeed = 100;   // الحد الأدنى للسرعة
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تهيئة أطراف المصابيح
+  pinMode(ledPin13, OUTPUT);
+  pinMode(ledPin14, OUTPUT);
+  pinMode(ledPin26, OUTPUT);
+  
+  // اختبار تشغيل جميع المصابيح
+  analogWrite(ledPin13, 100); delay(300);
+  analogWrite(ledPin14, 100); delay(300);
+  analogWrite(ledPin26, 100); delay(300);
+  analogWrite(ledPin13, 0);
+  analogWrite(ledPin14, 0);
+  analogWrite(ledPin26, 0);
+  
+  // تهيئة اتصال البلوتوث
+  SerialBT.begin("ESP32_LED_Slave");
+  Serial.println("الجهاز المستقبل جاهز للاتصال...");
+
+  // تهيئة المستشعر
+  Wire.begin();
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    Serial.println("فشل في الاتصال بجهاز MPU6050");
+    while(1);
+  }
+
+  // المعايرة
+  Serial.println("جارٍ معايرة المستشعر... يرجى عدم تحريك الجهاز");
+  mpu.CalibrateAccel(6);
+  mpu.CalibrateGyro(6);
+  Serial.println("تم تهيئة MPU6050 بنجاح");
+}
+
+void calculatePID() {
+  int16_t ax, ay, az;
+  mpu.getAcceleration(&ax, &ay, &az);
+
+  // حساب زاوية الميل مع تعويض الميل الثابت
+  float accYangle = atan2(-ax, sqrt(ay * ay + az * az)) * RAD_TO_DEG + angleOffset;
+
+  error = accYangle - targetAngle;
+  integral += error;
+  derivative = error - lastError;
+  output = Kp * error + Ki * integral + Kd * derivative;
+  lastError = error;
+
+  // تعديل السرعة الأساسية ديناميكيًا حسب زاوية الميل
+  float accAbs = abs(error);
+  int dynamicBaseSpeed = baseSpeed;
+
+  if (accAbs > 8) {
+    dynamicBaseSpeed += 40;
+  } else if (accAbs > 4) {
+    dynamicBaseSpeed += 20;
+  }
+
+  int controlOutput = dynamicBaseSpeed + output;
+  controlOutput = constrain(controlOutput, minSpeed, maxSpeed);
+
+  analogWrite(ledPin13, controlOutput);
+
+  // عرض البيانات للمراقبة
+  Serial.print("Angle: "); Serial.print(accYangle);
+  Serial.print(" | Output: "); Serial.print(output);
+  Serial.print(" | Control: "); Serial.println(controlOutput);
+}
+
+void handleBluetooth() {
+  if (SerialBT.available()) {
+    String incomingData = SerialBT.readStringUntil('\n');
+    Serial.print("استقبل: ");
+    Serial.println(incomingData);
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, incomingData);
+    
+    if (!error) {
+      String command = doc["command"];
+      bool state = doc["state"] | false;
+      
+      if (command == "increase_all") {
+        brightness14 = min(brightness14 + step, maxBrightness);
+        brightness26 = min(brightness26 + step, maxBrightness);
+        Serial.println("زيادة سطوع 14 و26");
+      } 
+      else if (command == "decrease_all") {
+        brightness14 = max(brightness14 - step, 0);
+        brightness26 = max(brightness26 - step, 0);
+        Serial.println("تقليل سطوع 14 و26");
+      }
+      else if (command == "boost_14_26") {
+        brightness14 = state ? maxBrightness : 0;
+        brightness26 = state ? maxBrightness : 0;
+        Serial.println(state ? "تشغيل كامل 14 و26" : "إطفاء 14 و26");
+      }
+      else if (command == "toggle_13") {
+        brightness13 = state ? maxBrightness : 0;
+        Serial.println(state ? "تشغيل LED 13" : "إطفاء LED 13");
+      }
+      
+      // تطبيق التغييرات على جميع المصابيح
+      analogWrite(ledPin14, brightness14);
+      analogWrite(ledPin26, brightness26);
+      analogWrite(ledPin13, brightness13);
+      
+      // طباعة حالات المصابيح للتأكد
+      Serial.print("حالة المصابيح: ");
+      Serial.print("13="); Serial.print(brightness13);
+      Serial.print(", 14="); Serial.print(brightness14);
+      Serial.print(", 26="); Serial.println(brightness26);
+      
+      // إرسال الرد
+      JsonDocument response;
+      response["status"] = "success";
+      response["led13"] = brightness13;
+      response["led14"] = brightness14;
+      response["led26"] = brightness26;
+      
+      String responseString;
+      serializeJson(response, responseString);
+      SerialBT.println(responseString);
+    }
+  }
+}
+
+void loop() {
+  calculatePID();
+  handleBluetooth();
+  delay(10);  // تأخير بسيط لتحسين الاستقرار
+}

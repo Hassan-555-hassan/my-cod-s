@@ -1,0 +1,106 @@
+#include <BluetoothSerial.h>
+BluetoothSerial BTSerial;
+
+// --- تعريف المخارج والأزرار ---
+const int OUT18 = 18;
+const int BTN12 = 12;
+
+const int OUT19 = 19;
+const int BTN14 = 14;
+
+const int OUT15 = 15;
+const int BTN21 = 21;
+
+const int OUT23 = 23;
+const int BTN22 = 22;
+
+// --- مؤقتات المخرجات المؤقتة ---
+unsigned long timer15_btn = 0;
+unsigned long timer15_bt = 0;
+const unsigned long duration15_btn = 3000;
+const unsigned long duration15_bt  = 3000;
+
+unsigned long timer23_btn = 0;
+unsigned long timer23_bt = 0;
+const unsigned long duration23_btn = 3000;
+const unsigned long duration23_bt  = 5000;
+
+// --- حالات البلوتوث ---
+bool bt18 = false;
+bool bt19 = false;
+bool bt15_cmd = false;
+bool bt23_cmd = false;
+
+// --- حالات الأزرار للمخرجات المؤقتة ---
+bool state15_btn = false;
+bool state23_btn = false;
+
+void setup() {
+  pinMode(OUT18, OUTPUT);
+  pinMode(OUT19, OUTPUT);
+  pinMode(OUT15, OUTPUT);
+  pinMode(OUT23, OUTPUT);
+
+  pinMode(BTN12, INPUT_PULLUP);
+  pinMode(BTN14, INPUT_PULLUP);
+  pinMode(BTN21, INPUT_PULLUP);
+  pinMode(BTN22, INPUT_PULLUP);
+
+  BTSerial.begin("ESP32_Control");
+  Serial.begin(115200);
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // --- قراءة البلوتوث ---
+  while(BTSerial.available()){
+    char cmd = BTSerial.read();
+    switch(cmd){
+      case '0': bt18 = false; break;
+      case '1': bt18 = true; break;
+      case '2': bt19 = true; break;
+      case '3': bt19 = false; break;
+      case '4': bt15_cmd = true; timer15_bt = now; break;
+      case '5': bt23_cmd = true; timer23_bt = now; break;
+    }
+  }
+
+  // --- المخرج 18 ---
+  bool btn18 = (digitalRead(BTN12) == LOW);
+  digitalWrite(OUT18, btn18 || bt18 ? HIGH : LOW);
+
+  // --- المخرج 19 ---
+  bool btn19 = (digitalRead(BTN14) == LOW);
+  digitalWrite(OUT19, btn19 || bt19 ? HIGH : LOW);
+
+  // --- المخرج 15 ---
+  bool btn15 = (digitalRead(BTN21) == LOW);
+  if(btn15 && !state15_btn){ // عند الضغط لأول مرة
+    timer15_btn = now;
+    state15_btn = true;
+  }
+  bool out15 = false;
+  if(state15_btn && now - timer15_btn < duration15_btn) out15 = true;
+  else state15_btn = false; // انتهاء المؤقت عند مرور 3 ثواني
+
+  if(bt15_cmd && now - timer15_bt < duration15_bt) out15 = true;
+  if(bt15_cmd && now - timer15_bt >= duration15_bt) bt15_cmd = false;
+
+  digitalWrite(OUT15, out15 ? HIGH : LOW);
+
+  // --- المخرج 23 ---
+  bool btn23 = (digitalRead(BTN22) == LOW);
+  if(btn23 && !state23_btn){ // عند الضغط لأول مرة
+    timer23_btn = now;
+    state23_btn = true;
+  }
+  bool out23 = false;
+  if(state23_btn && now - timer23_btn < duration23_btn) out23 = true;
+  else state23_btn = false;
+
+  if(bt23_cmd && now - timer23_bt < duration23_bt) out23 = true;
+  if(bt23_cmd && now - timer23_bt >= duration23_bt) bt23_cmd = false;
+
+  digitalWrite(OUT23, out23 ? HIGH : LOW);
+}

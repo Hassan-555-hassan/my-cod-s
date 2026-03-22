@@ -1,0 +1,152 @@
+// Transmitter (Tx) Code 
+// 18-Channel Independent Wireless Remote Switch ESP32 - ESPNow
+// Code by RBMK-5000 (c) 2023
+
+#include <esp_now.h>
+#include <WiFi.h>
+
+// REPLACE WITH YOUR RECEIVER MAC Address
+uint8_t receiverMacAddress[] = {0xC8, 0xC9, 0xA3, 0xC8, 0xAE, 0xBC};  // MAC Address of Receiver (C8:C9:A3:C8:AE:BC)
+
+struct PacketData {
+  byte switch1;
+};
+PacketData data;
+
+// Callback Function when data sent
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t ");
+  Serial.println(status);
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Message sent" : "Message failed");
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);  // Set ESP32 in Station mode
+
+  // Initializing ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  } else {
+    Serial.println("Success Initializing ESP-NOW");
+  }
+
+  esp_now_register_send_cb(OnDataSent);
+
+  // Registering & Adding Peer ESP (Receiver)
+  esp_now_peer_info_t peerInfo;
+  memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
+  peerInfo.channel = 0;  // channel 0 means it will automatically match the receiver's channel
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Failed Adding Peer");
+    return;
+  } else {
+    Serial.println("Success Adding Peer");
+  }
+
+  // Set up pinMode for switches (input pull-up)
+  pinMode(12, INPUT_PULLUP);  // Button or switch input
+
+  // Adding delay after initialization to ensure receiver is ready
+  delay(2000);  // Wait for 2 seconds to ensure the receiver is ready and connected
+}
+
+void loop() {
+  // Read switch and set its value
+  data.switch1 = !digitalRead(12);  // If the button is pressed, the value will be 1, else 0
+
+  // Send data to receiver
+  esp_err_t result = esp_now_send(receiverMacAddress, (uint8_t *) &data, sizeof(data));
+  if (result == ESP_OK) {
+    Serial.println("Sending Data Success");
+  } else {
+    Serial.println("Sending Data Error");
+  }
+
+  // Small delay between sending data
+  delay(50);
+}
+ 
+الكود الثاني للتطبيق 
+
+
+// Receiver (Rx) Code
+// 18-Channel Independent Wireless Remote Switch ESP32 - ESPNow
+
+#include <esp_now.h>
+#include <WiFi.h>
+
+#define TIMEOUT_TIMER 3000  // Resetting Data when no signal in 3 seconds
+
+unsigned long LastDataReceived = 0;
+
+struct PacketData {
+  byte switch1;
+};
+PacketData receiverData;     
+
+int led1 = 12;  // LED Pin
+
+// Setting Initial/Default Receiver Switch Status = "LOW" Mode 
+void SwitchDefaultValues() {
+  receiverData.switch1 = LOW;
+}
+
+void SwitchWriteValues() {
+  digitalWrite(led1, receiverData.switch1);  // Set LED pin to switch state
+}
+
+// Callback Function when data received
+void OnDataRecv(const esp_now_recv_info* recvInfo, const uint8_t *incomingData, int len) {
+  // Check if the received MAC address matches the specific MAC address
+  uint8_t targetMAC[] = {0xC8, 0xC9, 0xA3, 0xC8, 0xAE, 0xBC};  // Replace with sender MAC
+
+  // Use 'des_addr' to check the sender's MAC address
+  if (memcmp(recvInfo->des_addr, targetMAC, sizeof(targetMAC)) == 0) {
+    if (len == 0) {
+      return;
+    }
+    memcpy(&receiverData, incomingData, sizeof(receiverData));
+    SwitchWriteValues();  // Update the LED state based on received data
+    LastDataReceived = millis();  // Update the last received time
+  } else {
+    // Ignore data if MAC address doesn't match
+    Serial.println("Received data from an unrecognized MAC address.");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+
+  // Setting up pinMode for the LED
+  pinMode(led1, OUTPUT);
+
+  // Initialize all switches to OFF state
+  SwitchDefaultValues();
+  SwitchWriteValues();
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Register callback function with correct signature
+  esp_now_register_recv_cb(OnDataRecv);
+}
+
+void loop() {
+  // Checking Connection
+  unsigned long Now = millis();
+  if (Now - LastDataReceived > TIMEOUT_TIMER) {
+    // If no data received for a while, reset the LED to OFF state
+    SwitchDefaultValues();
+    SwitchWriteValues();
+  }
+}
+
+

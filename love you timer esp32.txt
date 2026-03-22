@@ -1,0 +1,151 @@
+#include <Arduino.h>
+
+// توزيع المصابيح (segments) حسب التوصيل
+const int segments[7] = {
+  19, // A
+  14, // B
+  12, // C
+  32, // D
+  13, // E
+  21, // F
+  23  // G
+};
+
+// توزيع الخانات (digits)
+const int digits[4] = {
+  5,   // الخانة الأولى
+  4,   // الخانة الثانية
+  15,  // الخانة الثالثة
+  18   // الخانة الرابعة
+};
+
+// تعريف الأرقام من 0 إلى 9
+const byte numbers[10][7] = {
+  {1, 1, 1, 1, 1, 1, 0},  // 0
+  {0, 1, 1, 0, 0, 0, 0},  // 1
+  {1, 1, 0, 1, 1, 0, 1},  // 2
+  {1, 1, 1, 1, 0, 0, 1},  // 3
+  {0, 1, 1, 0, 0, 1, 1},  // 4
+  {1, 0, 1, 1, 0, 1, 1},  // 5
+  {1, 0, 1, 1, 1, 1, 1},  // 6
+  {1, 1, 1, 0, 0, 0, 0},  // 7
+  {1, 1, 1, 1, 1, 1, 1},  // 8
+  {1, 1, 1, 1, 0, 1, 1}   // 9
+};
+
+// تعريف الأحرف لكلمة "LOVE YOU"
+const byte L[7] = {0, 0, 0, 1, 1, 1, 0};  // L
+const byte O[7] = {1, 1, 1, 1, 1, 1, 0};  // O
+const byte V[7] = {0, 1, 1, 1, 1, 1, 0};  // V (مثل U)
+const byte E[7] = {1, 0, 0, 1, 1, 1, 1};  // E
+const byte Y[7] = {0, 1, 1, 1, 0, 1, 1};  // Y
+const byte U[7] = {0, 1, 1, 1, 1, 1, 0};  // U
+const byte blank[7] = {0, 0, 0, 0, 0, 0, 0}; // فراغ
+
+unsigned long lastUpdate = 0;
+const unsigned long interval = 1000;  // 1 ثانية (1000 ميلي ثانية)
+
+int seconds = 0;
+int minutes = 0;
+bool showLoveYou = false;
+
+void setup() {
+  for (int i = 0; i < 7; i++) {
+    pinMode(segments[i], OUTPUT);
+    digitalWrite(segments[i], LOW);
+  }
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(digits[i], OUTPUT);
+    digitalWrite(digits[i], HIGH);
+  }
+}
+
+void displayDigit(int number, int digitIndex) {
+  for (int i = 0; i < 7; i++) {
+    digitalWrite(segments[i], numbers[number][i] ? HIGH : LOW);
+  }
+  digitalWrite(digits[digitIndex], LOW);
+  delay(2);
+  digitalWrite(digits[digitIndex], HIGH);
+}
+
+void displayLetter(const byte letter[7], int digitIndex) {
+  for (int i = 0; i < 7; i++) {
+    digitalWrite(segments[i], letter[i] ? HIGH : LOW);
+  }
+  digitalWrite(digits[digitIndex], LOW);
+  delay(2);
+  digitalWrite(digits[digitIndex], HIGH);
+}
+
+void updateTime() {
+  seconds++;
+  if (seconds >= 60) {
+    seconds = 0;
+    minutes++;
+    if (minutes >= 60) {
+      minutes = 0;
+    }
+    showLoveYou = true;
+  }
+}
+
+void displayTime() {
+  int s1 = seconds / 10;
+  int s2 = seconds % 10;
+  int m1 = minutes / 10;
+  int m2 = minutes % 10;
+
+  displayDigit(s1, 0);
+  displayDigit(s2, 1);
+  displayDigit(m1, 2);
+  displayDigit(m2, 3);
+}
+
+void displayLoveYou() {
+  static unsigned long loveStartTime = 0;
+  static bool showLove = false;
+  
+  if (loveStartTime == 0) {
+    loveStartTime = millis();
+  }
+  
+  // التبديل بين "LOVE" و " YOU" كل ثانية
+  if (millis() - loveStartTime >= 1000) {
+    loveStartTime = millis();
+    showLove = !showLove;
+  }
+  
+  if (showLove) {
+    displayLetter(L, 0);
+    displayLetter(O, 1);
+    displayLetter(V, 2);
+    displayLetter(E, 3);
+  } else {
+    displayLetter(blank, 0);
+    displayLetter(Y, 1);
+    displayLetter(O, 2);
+    displayLetter(U, 3);
+  }
+  
+  // العودة لعرض الوقت بعد 5 ثواني
+  if (millis() - loveStartTime >= 5000) {
+    showLoveYou = false;
+    loveStartTime = 0;
+  }
+}
+
+void loop() {
+  if (showLoveYou) {
+    displayLoveYou();
+  } else {
+    displayTime();
+  }
+
+  // تحديث الوقت كل ثانية
+  if (millis() - lastUpdate >= interval) {
+    lastUpdate = millis();
+    updateTime();
+  }
+}

@@ -1,0 +1,472 @@
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+
+BluetoothSerial SerialBT;
+
+// تعريف أطراف المصابيح
+const int ledPins[4] = {23, 22, 21, 19}; // PWM pins للمصابيح 1-4
+int brightness[4] = {0, 0, 0, 0};        // شدة الإضاءة لكل مصباح
+int prevBrightness[4] = {0, 0, 0, 0};    // تخزين الشدة السابقة
+const int step = 25;                      // خطوة تغيير شدة الإضاءة
+const int maxBrightness = 255;            // أقصى شدة إضاءة
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تهيئة أطراف المصابيح
+  for (int i = 0; i < 4; i++) {
+    pinMode(ledPins[i], OUTPUT);
+    analogWrite(ledPins[i], brightness[i]);
+  }
+  
+  SerialBT.begin("ESP32_LED_Slave");
+  Serial.println("الجهاز المستقبل جاهز للاتصال...");
+}
+
+void updateLeds() {
+  for (int i = 0; i < 4; i++) {
+    analogWrite(ledPins[i], brightness[i]);
+  }
+}
+
+void loop() {
+  if (SerialBT.available()) {
+    String incomingData = SerialBT.readStringUntil('\n');
+    Serial.print("Received: ");
+    Serial.println(incomingData);
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, incomingData);
+    
+    if (!error) {
+      String command = doc["command"];
+      
+      if (command == "increase_all") {
+        for (int i = 0; i < 4; i++) {
+          brightness[i] += step;
+          if (brightness[i] > maxBrightness) brightness[i] = maxBrightness;
+        }
+      } 
+      else if (command == "decrease_all") {
+        for (int i = 0; i < 4; i++) {
+          brightness[i] -= step;
+          if (brightness[i] < 0) brightness[i] = 0;
+        }
+      }
+      else if (command == "boost_12") {
+        if (doc["state"] == true) {
+          prevBrightness[0] = brightness[0];
+          prevBrightness[1] = brightness[1];
+          brightness[0] = maxBrightness;
+          brightness[1] = maxBrightness;
+        } else {
+          brightness[0] = prevBrightness[0];
+          brightness[1] = prevBrightness[1];
+        }
+      }
+      else if (command == "boost_34") {
+        if (doc["state"] == true) {
+          prevBrightness[2] = brightness[2];
+          prevBrightness[3] = brightness[3];
+          brightness[2] = maxBrightness;
+          brightness[3] = maxBrightness;
+        } else {
+          brightness[2] = prevBrightness[2];
+          brightness[3] = prevBrightness[3];
+        }
+      }
+      else if (command == "boost_23") {
+        if (doc["state"] == true) {
+          prevBrightness[1] = brightness[1];
+          prevBrightness[2] = brightness[2];
+          brightness[1] = maxBrightness;
+          brightness[2] = maxBrightness;
+        } else {
+          brightness[1] = prevBrightness[1];
+          brightness[2] = prevBrightness[2];
+        }
+      }
+      else if (command == "boost_14") {
+        if (doc["state"] == true) {
+          prevBrightness[0] = brightness[0];
+          prevBrightness[3] = brightness[3];
+          brightness[0] = maxBrightness;
+          brightness[3] = maxBrightness;
+        } else {
+          brightness[0] = prevBrightness[0];
+          brightness[3] = prevBrightness[3];
+        }
+      }
+      
+      updateLeds();
+      
+      // إرسال تأكيد
+      JsonDocument response;
+      response["status"] = "success";
+      for (int i = 0; i < 4; i++) {
+        response["brightness"][i] = brightness[i];
+      }
+      
+      String responseString;
+      serializeJson(response, responseString);
+      SerialBT.println(responseString);
+    } else {
+      Serial.println("خطأ في تحليل JSON");
+    }
+  }
+  delay(50);
+}
+
+الثاني 
+
+
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+
+BluetoothSerial SerialBT;
+
+// تعريف الأزرار
+const int increaseBtn = 22;    // زيادة شدة جميع المصابيح
+const int decreaseBtn = 21;    // تقليل شدة جميع المصابيح
+const int boostBtn12 = 18;     // زيادة شدة المصابيح 1 و2
+const int boostBtn34 = 19;     // زيادة شدة المصابيح 3 و4
+const int boostBtn23 = 5;      // زيادة شدة المصابيح 2 و3
+const int boostBtn14 = 17;     // زيادة شدة المصابيح 1 و4
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تهيئة الأزرار
+  pinMode(increaseBtn, INPUT_PULLUP);
+  pinMode(decreaseBtn, INPUT_PULLUP);
+  pinMode(boostBtn12, INPUT_PULLUP);
+  pinMode(boostBtn34, INPUT_PULLUP);
+  pinMode(boostBtn23, INPUT_PULLUP);
+  pinMode(boostBtn14, INPUT_PULLUP);
+  
+  SerialBT.begin("ESP32_LED_Master", true);
+  Serial.println("محاولة الاتصال بالجهاز المستقبل...");
+  
+  while (!SerialBT.connect("ESP32_LED_Slave")) {
+    Serial.println("إعادة محاولة الاتصال...");
+    delay(1000);
+  }
+  
+  Serial.println("تم الاتصال بنجاح");
+}
+
+void sendCommand(String command, bool state = false) {
+  JsonDocument doc;
+  doc["command"] = command;
+  if (command.startsWith("boost")) {
+    doc["state"] = state;
+  }
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  SerialBT.println(jsonString);
+  
+  // انتظار الرد
+  unsigned long startTime = millis();
+  while (!SerialBT.available() && millis() - startTime < 1000) {
+    delay(10);
+  }
+  
+  if (SerialBT.available()) {
+    String response = SerialBT.readStringUntil('\n');
+    Serial.println("الرد: " + response);
+  }
+}
+
+void loop() {
+  static unsigned long lastDebounceTime = 0;
+  const unsigned long debounceDelay = 200;
+  
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // التحكم في جميع المصابيح
+    if (digitalRead(increaseBtn) == LOW) {
+      sendCommand("increase_all");
+      lastDebounceTime = millis();
+    }
+    
+    if (digitalRead(decreaseBtn) == LOW) {
+      sendCommand("decrease_all");
+      lastDebounceTime = millis();
+    }
+    
+    // الأزرار المؤقتة (تعود عند ترك الزر)
+    static bool boost12Active = false;
+    static bool boost34Active = false;
+    static bool boost23Active = false;
+    static bool boost14Active = false;
+    
+    if (digitalRead(boostBtn12) == LOW && !boost12Active) {
+      sendCommand("boost_12", true);
+      boost12Active = true;
+      lastDebounceTime = millis();
+    } else if (digitalRead(boostBtn12) == HIGH && boost12Active) {
+      sendCommand("boost_12", false);
+      boost12Active = false;
+      lastDebounceTime = millis();
+    }
+    
+    if (digitalRead(boostBtn34) == LOW && !boost34Active) {
+      sendCommand("boost_34", true);
+      boost34Active = true;
+      lastDebounceTime = millis();
+    } else if (digitalRead(boostBtn34) == HIGH && boost34Active) {
+      sendCommand("boost_34", false);
+      boost34Active = false;
+      lastDebounceTime = millis();
+    }
+    
+    if (digitalRead(boostBtn23) == LOW && !boost23Active) {
+      sendCommand("boost_23", true);
+      boost23Active = true;
+      lastDebounceTime = millis();
+    } else if (digitalRead(boostBtn23) == HIGH && boost23Active) {
+      sendCommand("boost_23", false);
+      boost23Active = false;
+      lastDebounceTime = millis();
+    }
+    
+    if (digitalRead(boostBtn14) == LOW && !boost14Active) {
+      sendCommand("boost_14", true);
+      boost14Active = true;
+      lastDebounceTime = millis();
+    } else if (digitalRead(boostBtn14) == HIGH && boost14Active) {
+      sendCommand("boost_14", false);
+      boost14Active = false;
+      lastDebounceTime = millis();
+    }
+  }
+  
+  delay(50);
+} 
+
+الكود الخاص مع الجايروسكوب 
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <MPU6050.h>
+
+BluetoothSerial SerialBT;
+MPU6050 mpu;
+
+// تعريف أطراف المصابيح (تجنب 21 و22)
+const int ledPins[4] = {12, 13, 14, 26}; // PWM pins بديلة للمصابيح 1-4
+int brightness[4] = {0, 0, 0, 0};       // شدة الإضاءة لكل مصباح
+int prevBrightness[4] = {0, 0, 0, 0};   // تخزين الشدة السابقة
+const int step = 25;                     // خطوة تغيير شدة الإضاءة
+const int maxBrightness = 255;           // أقصى شدة إضاءة
+
+// متغيرات الجيروسكوب
+const float tiltThreshold = 15.0; // عتبة الميل بالدرجات
+unsigned long lastTiltTime = 0;
+const unsigned long tiltCooldown = 1000; // تأخير بين تغييرات الميل
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تهيئة أطراف المصابيح
+  for (int i = 0; i < 4; i++) {
+    pinMode(ledPins[i], OUTPUT);
+    analogWrite(ledPins[i], brightness[i]);
+  }
+  
+  // تهيئة اتصال البلوتوث
+  SerialBT.begin("ESP32_LED_Slave");
+  Serial.println("الجهاز المستقبل جاهز للاتصال...");
+
+  // تهيئة الجيروسكوب (يستخدم SDA=21, SCL=22 افتراضياً)
+  Wire.begin();
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    Serial.println("فشل في الاتصال بجهاز MPU6050");
+    while (1);
+  }
+  Serial.println("تم تهيئة MPU6050 بنجاح");
+}
+
+void updateLeds() {
+  for (int i = 0; i < 4; i++) {
+    analogWrite(ledPins[i], brightness[i]);
+  }
+}
+
+void handleTilt() {
+  if (millis() - lastTiltTime < tiltCooldown) return;
+
+  // قراءة بيانات الجيروسكوب
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  // تحويل البيانات إلى درجات
+  float accXangle = atan2(ay, az) * RAD_TO_DEG;
+  float accYangle = atan2(ax, az) * RAD_TO_DEG;
+
+  // تحديد اتجاه الميل
+  if (accXangle > tiltThreshold) {
+    // ميل لليسار - تشغيل المصابيح 3 و4
+    Serial.println("الميل لليسار - تشغيل boost_34");
+    prevBrightness[2] = brightness[2];
+    prevBrightness[3] = brightness[3];
+    brightness[2] = maxBrightness;
+    brightness[3] = maxBrightness;
+    lastTiltTime = millis();
+  } 
+  else if (accXangle < -tiltThreshold) {
+    // ميل لليمين - تشغيل المصابيح 1 و2
+    Serial.println("الميل لليمين - تشغيل boost_12");
+    prevBrightness[0] = brightness[0];
+    prevBrightness[1] = brightness[1];
+    brightness[0] = maxBrightness;
+    brightness[1] = maxBrightness;
+    lastTiltTime = millis();
+  }
+  else if (accYangle > tiltThreshold) {
+    // ميل للأمام - تشغيل المصابيح 2 و3
+    Serial.println("الميل للأمام - تشغيل boost_23");
+    prevBrightness[1] = brightness[1];
+    prevBrightness[2] = brightness[2];
+    brightness[1] = maxBrightness;
+    brightness[2] = maxBrightness;
+    lastTiltTime = millis();
+  }
+  else if (accYangle < -tiltThreshold) {
+    // ميل للخلف - تشغيل المصابيح 1 و4
+    Serial.println("الميل للخلف - تشغيل boost_14");
+    prevBrightness[0] = brightness[0];
+    prevBrightness[3] = brightness[3];
+    brightness[0] = maxBrightness;
+    brightness[3] = maxBrightness;
+    lastTiltTime = millis();
+  }
+  else {
+    // لا يوجد ميل - إعادة المصابيح إلى سطوعها السابق
+    bool needUpdate = false;
+    for (int i = 0; i < 4; i++) {
+      if (brightness[i] == maxBrightness) {
+        brightness[i] = prevBrightness[i];
+        needUpdate = true;
+      }
+    }
+    if (needUpdate) {
+      Serial.println("إعادة المصابيح إلى السطوع السابق");
+      lastTiltTime = millis();
+    }
+  }
+
+  updateLeds();
+}
+
+void loop() {
+  // معالجة بيانات الجيروسكوب
+  handleTilt();
+
+  // معالجة أوامر البلوتوث
+  if (SerialBT.available()) {
+    String incomingData = SerialBT.readStringUntil('\n');
+    Serial.print("Received: ");
+    Serial.println(incomingData);
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, incomingData);
+    
+    if (!error) {
+      String command = doc["command"];
+      
+      if (command == "increase_all") {
+        for (int i = 0; i < 4; i++) {
+          brightness[i] += step;
+          if (brightness[i] > maxBrightness) brightness[i] = maxBrightness;
+        }
+      } 
+      else if (command == "decrease_all") {
+        for (int i = 0; i < 4; i++) {
+          brightness[i] -= step;
+          if (brightness[i] < 0) brightness[i] = 0;
+        }
+      }
+      else if (command == "boost_12") {
+        if (doc["state"] == true) {
+          prevBrightness[0] = brightness[0];
+          prevBrightness[1] = brightness[1];
+          brightness[0] = maxBrightness;
+          brightness[1] = maxBrightness;
+        } else {
+          brightness[0] = prevBrightness[0];
+          brightness[1] = prevBrightness[1];
+        }
+      }
+      else if (command == "boost_34") {
+        if (doc["state"] == true) {
+          prevBrightness[2] = brightness[2];
+          prevBrightness[3] = brightness[3];
+          brightness[2] = maxBrightness;
+          brightness[3] = maxBrightness;
+        } else {
+          brightness[2] = prevBrightness[2];
+          brightness[3] = prevBrightness[3];
+        }
+      }
+      else if (command == "boost_23") {
+        if (doc["state"] == true) {
+          prevBrightness[1] = brightness[1];
+          prevBrightness[2] = brightness[2];
+          brightness[1] = maxBrightness;
+          brightness[2] = maxBrightness;
+        } else {
+          brightness[1] = prevBrightness[1];
+          brightness[2] = prevBrightness[2];
+        }
+      }
+      else if (command == "boost_14") {
+        if (doc["state"] == true) {
+          prevBrightness[0] = brightness[0];
+          prevBrightness[3] = brightness[3];
+          brightness[0] = maxBrightness;
+          brightness[3] = maxBrightness;
+        } else {
+          brightness[0] = prevBrightness[0];
+          brightness[3] = prevBrightness[3];
+        }
+      }
+      
+      updateLeds();
+      
+      // إرسال تأكيد
+      JsonDocument response;
+      response["status"] = "success";
+      for (int i = 0; i < 4; i++) {
+        response["brightness"][i] = brightness[i];
+      }
+      
+      String responseString;
+      serializeJson(response, responseString);
+      SerialBT.println(responseString);
+    } else {
+      Serial.println("خطأ في تحليل JSON");
+    }
+  }
+  
+  delay(50);
+}
+
+
+المكتبات الخاصة في platforomol ini 
+
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+monitor_speed = 115200
+lib_deps = 
+ bblanchon/ArduinoJson@^7.3.1
+ electroniccats/MPU6050@^0.6.0
+
+

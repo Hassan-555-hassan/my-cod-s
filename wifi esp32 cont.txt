@@ -1,0 +1,115 @@
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
+// بيانات الشبكة - تأكد من صحتها
+const char* ssid = "Galaxy A10s1641";  // تم إزالة المسافات الزائدة
+const char* password = "1234567890";
+
+const int ledPin = 2; // دبوس LED
+
+AsyncWebServer server(80);
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW); // تأكد من إطفاء LED عند البدء
+
+  // الاتصال بالشبكة مع تحسينات
+  Serial.println();
+  Serial.print("الاتصال بشبكة: ");
+  Serial.println(ssid);
+  
+  WiFi.begin(ssid, password);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nفشل الاتصال بالشبكة!");
+    Serial.println("الرجاء التحقق من:");
+    Serial.println("1. اسم الشبكة وكلمة المرور");
+    Serial.println("2. تأكد أن الهاتف يعمل كنقطة اتصال");
+    Serial.println("3. المسافة بين ESP32 والهاتف");
+    while(1) { delay(1000); } // توقف نهائي
+  }
+  
+  Serial.println("\nتم الاتصال بنجاح!");
+  Serial.print("عنوان IP: ");
+  Serial.println(WiFi.localIP());
+
+  // تحسينات صفحة الويب
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    String state = (digitalRead(ledPin)) ? "مضاء" : "مطفأ";
+    
+    String html = R"rawliteral(
+    <!DOCTYPE html><html><head>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>تحكم في LED</title>
+    <style>
+      body{font-family:Arial;text-align:center;margin-top:50px;}
+      .button{
+        background-color:#4CAF50;
+        border:none;
+        color:white;
+        padding:15px 32px;
+        text-align:center;
+        text-decoration:none;
+        display:inline-block;
+        font-size:16px;
+        margin:10px;
+        cursor:pointer;
+        border-radius:10px;
+        width:150px;
+      }
+      .button-off{background-color:#f44336;}
+      .status{font-weight:bold;margin:20px;}
+    </style>
+    </head>
+    <body>
+      <h1>تحكم في LED</h1>
+      <div class='status'>الحالة: )rawliteral" + state + R"rawliteral(</div>
+      <a href='/on' class='button'>تشغيل LED</a>
+      <a href='/off' class='button button-off'>إطفاء LED</a>
+    </body></html>
+    )rawliteral";
+    
+    request->send(200, "text/html", html);
+  });
+
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, HIGH);
+    request->send(200, "text/plain", "LED مضاء");
+    Serial.println("تم تشغيل LED");
+  });
+
+  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, LOW);
+    request->send(200, "text/plain", "LED مطفأ");
+    Serial.println("تم إطفاء LED");
+  });
+
+  server.begin();
+  Serial.println("الخادم بدأ العمل!");
+}
+
+void loop() {
+  // يمكنك إضافة أي كود إضافي هنا إذا لزم الأمر
+  delay(100); // تقليل استهلاك المعالج
+}
+ المكتبات
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+upload_port = COM3 ; استبدل X برقم المنفذ الصحيح
+monitor_speed = 115200
+lib_deps = 
+    esphome/AsyncTCP-esphome@^1.2.2
+    esphome/ESPAsyncWebServer-esphome@^2.1.0
+
+الموقع http://192.168.197.171

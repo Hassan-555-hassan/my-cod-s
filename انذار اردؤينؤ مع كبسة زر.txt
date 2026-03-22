@@ -1,0 +1,34 @@
+#define BUZZER_PIN 3
+#define BUTTON_PIN 10
+
+bool buzzerOn = false; // حالة البازر
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // الزر بين البن والأرضي
+}
+
+void loop() {
+  // إذا انضغط الزر (لأنه موصل بالأرضي يكون LOW)
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    buzzerOn = true;  // فعل البازر
+  }
+
+  if (buzzerOn) {
+    // تصاعد التردد من 1000 إلى 3000
+    for (int freq = 1000; freq <= 3000; freq += 5) {
+      tone(BUZZER_PIN, freq);
+      delay(2);
+    }
+
+    delay(100);
+
+    // تناقص التردد من 3000 إلى 1000
+    for (int freq = 3000; freq >= 1000; freq -= 5) {
+      tone(BUZZER_PIN, freq);
+      delay(2);
+    }
+
+    delay(10); // فترة قصيرة قبل التكرار
+  }
+}

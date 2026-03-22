@@ -1,0 +1,42 @@
+// تعريف الأرجل بناءً على طلبك
+const int trigPin = 15;
+const int echoPin = 16;
+
+// تعريف متغيرات الوقت والمسافة
+long duration;
+float distanceCm;
+
+void setup() {
+  // تشغيل واجهة السيريال بسرعة 115200 (مناسبة للـ ESP32)
+  Serial.begin(115200);
+  
+  // ضبط وضعية الأرجل
+  pinMode(trigPin, OUTPUT); // المرسل
+  pinMode(echoPin, INPUT);  // المستقبل
+}
+
+void loop() {
+  // تنظيف الـ trigPin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // إرسال نبضة لمدة 10 ميكروثانية
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // قراءة زمن عودة النبضة بالميكروثانية
+  duration = pulseIn(echoPin, HIGH);
+
+  // حساب المسافة (السرعة = 0.034 سم/ميكروثانية)
+  // نقسم على 2 لأن النبضة تذهب وتعود
+  distanceCm = duration * 0.034 / 2;
+
+  // طباعة النتائج على السيريال
+  Serial.print("Distance: ");
+  Serial.print(distanceCm);
+  Serial.println(" cm");
+
+  // تأخير بسيط قبل القراءة التالية
+  delay(500);
+}

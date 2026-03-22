@@ -1,0 +1,71 @@
+#define BLYNK_TEMPLATE_ID "ضع_هنا_Template_ID"
+#define BLYNK_TEMPLATE_NAME "Radar System"
+#define BLYNK_AUTH_TOKEN "ضع_هنا_التوكين"
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+// بيانات الشبكة
+char auth[] = BLYNK_AUTH_TOKEN;
+char ssid[] = "Rami2.4G";
+char pass[] = "RAMI1985rami";
+
+// تعريف الأرجل (حسب طلبك السابق)
+const int trigPin = 15;
+const int echoPin = 16;
+const int outputPin = 2;
+
+BlynkTimer timer;
+
+void readRadar() {
+  long duration;
+  float distance;
+
+  // إرسال النبضة
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // قراءة زمن العودة
+  duration = pulseIn(echoPin, HIGH);
+  distance = duration * 0.034 / 2;
+
+  // حصر المسافة لغاية 2 متر (200 سم) كما طلبت
+  if (distance > 200) distance = 200;
+
+  // إرسال البيانات لتطبيق Blynk
+  Blynk.virtualWrite(V1, distance); // تحديث الـ Gauge (الرادار البصري)
+  Blynk.virtualWrite(V3, distance); // تحديث القيمة الرقمية
+
+  // الشرط: إذا قلت المسافة عن 30 سم
+  if (distance > 0 && distance <= 30) {
+    digitalWrite(outputPin, HIGH); // تشغيل المخرج الفيزيائي
+    Blynk.virtualWrite(V2, 255);   // إضاءة الـ LED في التطبيق (تنبيه)
+    Serial.println("Warning: Object within 30cm!");
+  } else {
+    digitalWrite(outputPin, LOW);  // إطفاء المخرج
+    Blynk.virtualWrite(V2, 0);     // إطفاء الـ LED في التطبيق
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(outputPin, OUTPUT);
+
+  // الاتصال بـ Blynk
+  Blynk.begin(auth, ssid, pass);
+
+  // ضبط المؤقت للقراءة كل 200 ملي ثانية (للحصول على حركة سريعة كالرادار)
+  timer.setInterval(200L, readRadar);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}

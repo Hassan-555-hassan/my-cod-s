@@ -1,0 +1,168 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+
+#define BLACK       0x0000
+#define WHITE       0xFFFF
+#define CYAN        0x07FF
+#define EYE_COLOR   CYAN  // لون العينين والفم
+
+MCUFRIEND_kbv tft;
+
+#define YP A1
+#define XM A2
+#define YM 7
+#define XP 6
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+#define TS_LEFT 150
+#define TS_RT   920
+#define TS_TOP  120
+#define TS_BOT  900
+
+// متغيرات التحكم
+unsigned long lastWinkTime = 0;
+unsigned long messageTime = 0;
+int messageStage = 0;
+bool showHiPeriodically = false;
+unsigned long lastHiTime = 0;
+bool rightEyeOpen = true;
+bool inHeartMode = false;
+
+void setup() {
+  Serial.begin(9600);
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(1);
+  tft.fillScreen(BLACK);
+  drawFace();
+  messageTime = millis();
+  lastWinkTime = millis();
+}
+
+void drawFace() {
+  tft.fillScreen(BLACK);
+
+  // العين اليسرى
+  tft.fillCircle(80, 100, 40, EYE_COLOR);
+  tft.fillRect(40, 100, 80, 40, BLACK);
+
+  // العين اليمنى
+  if (rightEyeOpen) {
+    tft.fillCircle(240, 100, 40, EYE_COLOR);
+    tft.fillRect(200, 100, 80, 40, BLACK);
+  } else {
+    tft.fillRect(220, 90, 40, 5, EYE_COLOR);
+  }
+
+  // الفم
+  tft.fillRect(130, 180, 60, 5, EYE_COLOR);
+}
+
+void showMessage(const char* text) {
+  tft.fillRect(50, 20, 220, 20, BLACK);
+  tft.setTextColor(CYAN);
+  tft.setTextSize(2);
+  tft.setCursor(50, 20);
+  tft.print(text);
+}
+
+// دالة رسم القلب بشكل أجمل وواضح
+void drawHeartFilled() {
+  tft.fillScreen(BLACK);
+  int x = 160; // مركز القلب أفقيًا
+  int y = 120; // مركز القلب عموديًا
+  int size = 60; // حجم القلب
+
+  // الجزء العلوي من القلب: دائرتان متداخلتان
+  tft.fillCircle(x - size/2, y - size/3, size/2, EYE_COLOR);
+  tft.fillCircle(x + size/2, y - size/3, size/2, EYE_COLOR);
+
+  // الجزء السفلي من القلب: مثلث مقلوب
+  int triX1 = x - size;
+  int triY1 = y - size/4;
+  int triX2 = x + size;
+  int triY2 = y - size/4;
+  int triX3 = x;
+  int triY3 = y + size + 20;  // ⬅️ أنزلنا المثلث قليلاً لتحسين الشكل
+
+  tft.fillTriangle(triX1, triY1, triX2, triY2, triX3, triY3, EYE_COLOR);
+}
+
+
+void loop() {
+  TSPoint p = ts.getPoint();
+  pinMode(XM, OUTPUT);
+  pinMode(YP, OUTPUT);
+  digitalWrite(XM, LOW);
+  digitalWrite(YP, LOW);
+
+  unsigned long currentTime = millis();
+
+  // اللمس في وسط الشاشة لإظهار القلب
+  if (!inHeartMode && p.z > MINPRESSURE && p.z < MAXPRESSURE) {
+    int x = map(p.y, TS_LEFT, TS_RT, 0, tft.width());
+    int y = map(p.x, TS_TOP, TS_BOT, 0, tft.height());
+
+ if (x >= 40 && x <= 280 && y >= 30 && y <= 210) {
+      inHeartMode = true;
+      drawHeartFilled();
+      delay(2000);
+      drawFace();
+      messageTime = currentTime;
+      lastWinkTime = currentTime;
+      inHeartMode = false;
+      return;
+    }
+  }
+
+  // تسلسل الرسائل
+  if (!showHiPeriodically) {
+    switch (messageStage) {
+      case 0:
+        showMessage("Hello world");
+        messageTime = currentTime;
+        messageStage++;
+        break;
+
+      case 1:
+        if (currentTime - messageTime > 3000) {
+          showMessage("I'm robo_hassan");
+          messageTime = currentTime;
+          messageStage++;
+        }
+        break;
+
+      case 2:
+        if (currentTime - messageTime > 3000) {
+          showMessage("eng_hassan");
+          messageTime = currentTime;
+          messageStage++;
+          showHiPeriodically = true;
+          lastHiTime = currentTime;
+        }
+        break;
+    }
+  } else {
+    if (currentTime - lastHiTime > 30000) {
+      showMessage("eng_hassan");
+      lastHiTime = currentTime;
+      delay(3000);
+      showMessage("");
+    }
+  }
+
+  // الغمز كل 5 ثواني
+  if (currentTime - lastWinkTime > 5000) {
+    rightEyeOpen = false;
+    drawFace();
+    delay(300);
+    rightEyeOpen = true;
+    drawFace();
+    lastWinkTime = currentTime;
+  }
+}

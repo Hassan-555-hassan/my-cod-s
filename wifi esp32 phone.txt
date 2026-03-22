@@ -1,0 +1,81 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// إعداد اسم الـ AP وكلمة السر الخاصة به
+const char *ssid = "ESP32-LED-AP";  // اسم الـ AP
+const char *password = "123456789";  // كلمة السر الخاصة بالجهاز
+
+// إعداد رقم المنفذ الذي يتصل به المستخدم
+WebServer server(80);
+
+// رقم المنفذ الذي يتصل به الLED
+const int ledPin = 2;  // رقم المنفذ الذي يتصل به الLED (عادةً في ESP32، المنفذ 2 هو LED مدمج)
+
+// دالة لتشغيل أو إيقاف الLED بناءً على الطلب
+void handleRoot() {
+  String html = "<html><body><h1>ESP32 LED Control</h1>";
+  html += "<p><a href=\"/on\"><button>Turn ON</button></a></p>";
+  html += "<p><a href=\"/off\"><button>Turn OFF</button></a></p>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleOn() {
+  digitalWrite(ledPin, HIGH);  // تشغيل الLED
+  server.sendHeader("Location", "/");  // إعادة توجيه المستخدم للصفحة الرئيسية
+  server.send(303);  // استجابة إعادة التوجيه
+}
+
+void handleOff() {
+  digitalWrite(ledPin, LOW);  // إيقاف الLED
+  server.sendHeader("Location", "/");  // إعادة توجيه المستخدم للصفحة الرئيسية
+  server.send(303);  // استجابة إعادة التوجيه
+}
+
+void setup() {
+  // تهيئة الـ LED
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);  // إيقاف تشغيل الLED عند البدء
+
+  // إعداد الـ Wi-Fi Access Point
+  WiFi.softAP(ssid, password);  // تفعيل الـ Access Point باستخدام اسم وكلمة السر المحددة
+
+  Serial.begin(115200);
+  Serial.println();
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.softAPIP());  // طباعة عنوان الـ IP الخاص بالجهاز
+
+  // إعداد المسارات في الخادم
+  server.on("/", handleRoot);
+  server.on("/on", handleOn);
+  server.on("/off", handleOff);
+
+  // بدء الخادم
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();  // معالجة الطلبات الواردة
+}
+ المكتبات الخاصة به 
+; PlatformIO Project Configuration File
+;
+;   Build options: build flags, source filter
+;   Upload options: custom upload port, speed and extra flags
+;   Library options: dependencies, extra library storages
+;   Advanced options: extra scripting
+;
+; Please visit documentation for the other options and examples
+; https://docs.platformio.org/page/projectconf.html
+
+[env:esp32dev]
+platform = espressif32
+framework = arduino
+board = esp32dev
+monitor_speed = 115200  ; سرعة المراقبة عبر المنفذ التسلسلي
+lib_deps = 
+    WiFi
+    WebSockets
+
+      
+

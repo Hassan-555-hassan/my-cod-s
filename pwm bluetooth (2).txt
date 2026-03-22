@@ -1,0 +1,143 @@
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+
+BluetoothSerial SerialBT;
+
+const int ledPin = 23; // PWM pin للتحكم في شدة الإضاءة
+int brightness = 0;    // شدة الإضاءة الحالية (0-255)
+const int step = 25;   // خطوة تغيير شدة الإضاءة
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  analogWrite(ledPin, brightness);
+  
+  SerialBT.begin("ESP32_LED_Slave");
+  Serial.println("الجهاز المستقبل جاهز للاتصال...");
+}
+
+void loop() {
+  if (SerialBT.available()) {
+    String incomingData = SerialBT.readStringUntil('\n');
+    Serial.print("Received: ");
+    Serial.println(incomingData);
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, incomingData);
+    
+    if (!error) {
+      String command = doc["command"];
+      
+      if (command == "increase") {
+        brightness += step;
+        if (brightness > 255) brightness = 255;
+      } 
+      else if (command == "decrease") {
+        brightness -= step;
+        if (brightness < 0) brightness = 0;
+      }
+      else if (command == "set") {
+        brightness = doc["value"];
+        if (brightness > 255) brightness = 255;
+        if (brightness < 0) brightness = 0;
+      }
+      
+      analogWrite(ledPin, brightness);
+      Serial.print("شدة الإضاءة الحالية: ");
+      Serial.println(brightness);
+      
+      // إرسال تأكيد
+      JsonDocument response;
+      response["status"] = "success";
+      response["brightness"] = brightness;
+      
+      String responseString;
+      serializeJson(response, responseString);
+      SerialBT.println(responseString);
+    } else {
+      Serial.println("خطأ في تحليل JSON");
+    }
+  }
+  delay(50);
+} 
+الثاني 
+
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include <ArduinoJson.h>
+
+BluetoothSerial SerialBT;
+
+const int increaseBtn = 22;
+const int decreaseBtn = 21;
+int lastBrightness = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(increaseBtn, INPUT_PULLUP);
+  pinMode(decreaseBtn, INPUT_PULLUP);
+  
+  SerialBT.begin("ESP32_LED_Master", true);
+  Serial.println("محاولة الاتصال بالجهاز المستقبل...");
+  
+  while (!SerialBT.connect("ESP32_LED_Slave")) {
+    Serial.println("إعادة محاولة الاتصال...");
+    delay(1000);
+  }
+  
+  Serial.println("تم الاتصال بنجاح");
+}
+
+void sendCommand(String command, int value = 0) {
+  JsonDocument doc;
+  doc["command"] = command;
+  if (command == "set") {
+    doc["value"] = value;
+  }
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  SerialBT.println(jsonString);
+  
+  // انتظار الرد
+  unsigned long startTime = millis();
+  while (!SerialBT.available() && millis() - startTime < 1000) {
+    delay(10);
+  }
+  
+  if (SerialBT.available()) {
+    String response = SerialBT.readStringUntil('\n');
+    Serial.println("الرد: " + response);
+  }
+}
+
+void loop() {
+  static unsigned long lastDebounceTime = 0;
+  const unsigned long debounceDelay = 200;
+  
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(increaseBtn) == LOW) {
+      sendCommand("increase");
+      lastDebounceTime = millis();
+    }
+    
+    if (digitalRead(decreaseBtn) == LOW) {
+      sendCommand("decrease");
+      lastDebounceTime = millis();
+    }
+  }
+  
+  delay(50);
+}
+
+المكتبات الخاصة في ini 
+
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+monitor_speed = 115200
+lib_deps = 
+    bblanchon/ArduinoJson@^7.3.1
+

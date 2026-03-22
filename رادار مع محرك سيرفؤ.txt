@@ -1,0 +1,87 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESP32Servo.h> // تأكد من تثبيت مكتبة ESP32Servo
+
+const char* ssid = "Rami2.4G";
+const char* password = "RAMI1985rami";
+
+const int trigPin = 15;
+const int echoPin = 16;
+const int servoPin = 13; // بن المحرك
+const int outputPin = 2;
+
+Servo myServo;
+WebServer server(80);
+
+int currentAngle = 0;
+float currentDist = 0;
+bool scanningForward = true;
+
+float getDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  float d = duration * 0.034 / 2;
+  return (d > 400 || d <= 0) ? 400 : d;
+}
+
+String getHTML() {
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1' charset='UTF-8'>";
+  html += "<style>body{background:#000; color:#0f0; text-align:center; font-family:monospace;}";
+  html += "canvas{background:#001100; border:2px solid #0f0; border-radius:10px; max-width:95vw;}";
+  html += "</style></head><body><h1>REAL-TIME RADAR SCANNER</h1>";
+  html += "<canvas id='radar' width='600' height='350'></canvas>";
+  html += "<div id='info'>ANGLE: 0° | DISTANCE: 0 cm</div>";
+  
+  html += "<script>const canvas=document.getElementById('radar'); const ctx=canvas.getContext('2d');";
+  html += "let objects = []; function drawRadar(){";
+  html += "ctx.fillStyle='rgba(0, 8, 0, 0.05)'; ctx.fillRect(0,0,600,350);"; // تأثير الأثر المتلاشي
+  // رسم الأقواس
+  html += "ctx.strokeStyle='#0f0'; ctx.lineWidth=1; for(let i=1;i<=3;i++){ ctx.beginPath(); ctx.arc(300,330,i*100,Math.PI,0); ctx.stroke(); }";
+  html += "ctx.beginPath(); ctx.moveTo(300,330); ctx.lineTo(300,30); ctx.stroke();";
+  html += "requestAnimationFrame(drawRadar);} drawRadar();";
+  
+  // تحديث البيانات ورسم النقطة
+  html += "setInterval(function(){ fetch('/data').then(r=>r.json()).then(d=>{";
+  html += "document.getElementById('info').innerHTML = 'ANGLE: '+d.angle+'° | DIST: '+d.dist+' cm';";
+  html += "let rad = d.angle * Math.PI / 180; let x = 300 + Math.cos(Math.PI - rad) * (d.dist * 0.8); let y = 330 - Math.sin(Math.PI - rad) * (d.dist * 0.8);";
+  html += "if(d.dist <= 10){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill(); }";
+  html += "else { ctx.fillStyle='#0f0'; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); }";
+  html += "});}, 50);</script></body></html>";
+  return html;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(outputPin, OUTPUT);
+  myServo.attach(servoPin);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  
+  server.on("/", []() { server.send(200, "text/html", getHTML()); });
+  server.on("/data", []() {
+    currentDist = getDistance();
+    if(currentDist <= 10) digitalWrite(outputPin, HIGH); else digitalWrite(outputPin, LOW);
+    String json = "{\"dist\":" + String(currentDist) + ",\"angle\":" + String(currentAngle) + "}";
+    server.send(200, "application/json", json);
+  });
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+  
+  // حركة المحرك يميناً ويساراً
+  myServo.write(currentAngle);
+  delay(15); 
+  if (scanningForward) currentAngle++; else currentAngle--;
+  if (currentAngle >= 180) scanningForward = false;
+  if (currentAngle <= 0) scanningForward = true;
+}

@@ -1,0 +1,41 @@
+const int buttonPin = 32;
+const int outputPin = 4;
+const int pressThreshold = 5;
+
+int pressCount = 0;
+bool lastButtonState = HIGH;
+unsigned long lastPressTime = 0;
+const unsigned long pressDelay = 1000; // 1.5 ثانية بين الضغطات
+
+void setup() {
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(outputPin, OUTPUT);
+  digitalWrite(outputPin, LOW);
+
+  Serial.begin(115200);
+}
+
+void loop() {
+  bool currentState = digitalRead(buttonPin);
+  unsigned long currentTime = millis();
+
+  // تحقق من الضغط الجديد مع الانتظار 1.5 ثانية بين كل ضغطة
+  if (lastButtonState == HIGH && currentState == LOW) { 
+    if (currentTime - lastPressTime >= pressDelay) {
+      pressCount++;
+      lastPressTime = currentTime;
+      Serial.print("Press count: ");
+      Serial.println(pressCount);
+
+      if (pressCount >= pressThreshold) {
+        Serial.println("Output HIGH for 5 seconds!");
+        digitalWrite(outputPin, HIGH);
+        delay(5000);            // المخرج يعمل 5 ثوانٍ
+        digitalWrite(outputPin, LOW);
+        pressCount = 0;         // إعادة العداد
+      }
+    }
+  }
+
+  lastButtonState = currentState;
+}

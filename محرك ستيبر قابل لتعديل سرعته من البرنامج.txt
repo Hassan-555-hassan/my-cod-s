@@ -1,0 +1,30 @@
+#include <Stepper.h>
+
+const int stepsPerRevolution = 200; // عدد الخطوات لكل دورة
+Stepper myStepper(stepsPerRevolution, 8, 9, 10, 11);
+
+const int rotationSteps = 200; // عدد الخطوات لكل دورة كاملة أو حسب رغبتك
+const int pauseTime = 1000;    // وقت التوقف بالملي ثانية
+
+// السرعة الجديدة منخفضة لتقليل سخونة المحرك عند 12V
+const int safeSpeed = 80; // دورة/دقيقة، يمكن تعديلها لتوازن بين السخونة والحركة
+
+void setup() {
+  myStepper.setSpeed(safeSpeed); // ضبط السرعة الآمنة
+}
+
+void loop() {
+  // الدوران في اتجاه واحد
+  for (int i = 0; i < rotationSteps; i++) {
+    myStepper.step(1);
+  }
+
+  delay(pauseTime); // توقف قصير
+
+  // الدوران في الاتجاه المعاكس
+  for (int i = 0; i < rotationSteps; i++) {
+    myStepper.step(-1);
+  }
+
+  delay(pauseTime); // توقف قصير قبل تكرار الحركة
+}

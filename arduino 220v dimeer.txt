@@ -1,0 +1,51 @@
+#include <BluetoothSerial.h>
+
+BluetoothSerial SerialBT;
+
+const int zeroCrossPin = 15; // دبوس الكشف عن zero cross
+const int triacPin = 4;      // دبوس التحكم في الترياك
+
+volatile bool zeroCrossDetected = false;
+volatile int delayTime = 0;  // تأخير بالميكروثانية بعد الـ zero cross
+
+int powerLevel = 0;          // 0 - 100 (%)
+
+// مقاطعة الكشف عن zero cross
+void IRAM_ATTR zeroCrossISR() {
+  zeroCrossDetected = true;
+}
+
+void setup() {
+  Serial.begin(115200);
+  SerialBT.begin("ESP32_Triac");
+
+  pinMode(zeroCrossPin, INPUT_PULLUP);
+  pinMode(triacPin, OUTPUT);
+  digitalWrite(triacPin, LOW);
+
+  attachInterrupt(digitalPinToInterrupt(zeroCrossPin), zeroCrossISR, FALLING);
+}
+
+void loop() {
+  if (SerialBT.available()) {
+    char c = SerialBT.read();
+    if (c >= '0' && c <= '9') {
+      // قراءة رقم بين 0 و 9 (يمكن تطوير لقراءة أكثر من رقم)
+      powerLevel = (c - '0') * 10; // تقريبًا 0, 10, 20,...90
+      delayTime = map(powerLevel, 0, 100, 9000, 0); // تأخير للتحكم بالقدرة (مثال لقيمة)
+      SerialBT.printf("Power: %d%%, Delay: %d us\n", powerLevel, delayTime);
+    }
+  }
+
+  if (zeroCrossDetected) {
+    zeroCrossDetected = false;
+
+    // تأخير حسب شدة الإضاءة
+    delayMicroseconds(delayTime);
+
+    // إطلاق نبضة قصيرة لتشغيل الترياك
+    digitalWrite(triacPin, HIGH);
+    delayMicroseconds(100); // 100 ميكروثانية كافية
+    digitalWrite(triacPin, LOW);
+  }
+}

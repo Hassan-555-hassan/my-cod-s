@@ -1,0 +1,76 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "Rami2.4G";
+const char* password = "RAMI1985rami";
+
+const int trigPin = 15;
+const int echoPin = 16;
+const int outputPin = 2;
+
+WebServer server(80);
+
+float getDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  float distance = duration * 0.034 / 2;
+  // منع القراءات الوهمية البعيدة جداً
+  if (distance > 400) return 400; 
+  return distance;
+}
+
+String getHTML() {
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1' charset='UTF-8'>";
+  html += "<style>body{text-align:center; font-family:Arial; background:#f4f4f4;}";
+  html += ".container{margin-top:50px;} .distance{font-size:48px; color:#2c3e50;}";
+  html += ".status{font-size:24px; padding:20px; margin-top:20px; color:white; border-radius:10px;}";
+  html += ".on{background:red;} .off{background:green;}</style>";
+  
+  // تعديل الشرط هنا في الـ JavaScript ليصبح 10 سم أيضاً
+  html += "<script>setInterval(function(){ fetch('/data').then(r=>r.json()).then(d=>{";
+  html += "document.getElementById('dist').innerHTML = d.distance + ' cm';";
+  html += "let s = document.getElementById('stat'); if(d.distance <= 10 && d.distance > 0){"; 
+  html += "s.innerHTML = 'تنبيه: جسم قريب جداً!'; s.className='status on';} else {";
+  html += "s.innerHTML = 'المنطقة آمنة'; s.className='status off';}});}, 500);</script>";
+  
+  html += "</head><body><div class='container'><h1>نظام مراقبة المسافة</h1>";
+  html += "<div class='distance' id='dist'>0 cm</div>";
+  html += "<div id='stat' class='status off'>المنطقة آمنة</div></div></body></html>";
+  return html;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(outputPin, OUTPUT);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  
+  Serial.println("\nConnected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", []() { server.send(200, "text/html", getHTML()); });
+  server.on("/data", []() {
+    float d = getDistance();
+    // تفعيل المخرج عند 10 سم
+    if (d <= 10 && d > 0) digitalWrite(outputPin, HIGH);
+    else digitalWrite(outputPin, LOW);
+    
+    String json = "{\"distance\":" + String(d) + "}";
+    server.send(200, "application/json", json);
+  });
+  
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}

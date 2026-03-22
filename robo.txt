@@ -1,0 +1,115 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+
+#define BLACK   0x0000
+#define BLUE    0x001F
+#define RED     0xF800
+#define GREEN   0x07E0
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+#define WHITE   0xFFFF
+
+MCUFRIEND_kbv tft;
+#define LED_PIN 10
+
+#define YP A1
+#define XM A2
+#define YM 7
+#define XP 6
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+#define TS_LEFT 150
+#define TS_RT   920
+#define TS_TOP  120
+#define TS_BOT  900
+
+bool ledState = false;
+int eyeOffset = 0;
+
+void drawEyes(int offset) {
+  tft.fillCircle(80, 80, 20, WHITE);    // العين اليسرى
+  tft.fillCircle(240, 80, 20, WHITE);   // العين اليمنى
+
+  tft.fillCircle(80 + offset, 80, 6, BLACK);   // بؤبؤ العين اليسرى
+  tft.fillCircle(240 + offset, 80, 6, BLACK);  // بؤبؤ العين اليمنى
+}
+
+void drawNose() {
+  tft.fillTriangle(160, 100, 150, 130, 170, 130, YELLOW);
+}
+
+void drawMouth(bool happy) {
+  // مسح الفم
+  tft.fillRect(100, 160, 120, 60, BLACK);
+
+  if (happy) {
+    // فم مبتسم باستخدام مثلث مقلوب للأسفل
+    tft.fillTriangle(120, 190, 160, 210, 200, 190, GREEN);
+  } else {
+    // فم حزين باستخدام مثلث مقلوب للأعلى
+    tft.fillTriangle(120, 210, 160, 190, 200, 210, RED);
+  }
+
+  // أزرار ON و OFF داخل الفم
+  tft.fillRect(105, 170, 50, 30, GREEN);
+  tft.setTextColor(BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(115, 177);
+  tft.print("ON");
+
+  tft.fillRect(165, 170, 50, 30, RED);
+  tft.setCursor(175, 177);
+  tft.setTextColor(BLACK);
+  tft.print("OFF");
+}
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(9600);
+
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(1);
+  tft.fillScreen(BLACK);
+
+  tft.setTextColor(CYAN);
+  tft.setTextSize(2);
+  tft.setCursor(40, 20);
+  tft.print("Hi! I'm Robo-Hassan");
+
+  drawEyes(eyeOffset);
+  drawNose();
+  drawMouth(ledState);
+}
+
+void loop() {
+  TSPoint p = ts.getPoint();
+  pinMode(XM, OUTPUT);
+  pinMode(YP, OUTPUT);
+
+  if (p.z > MINPRESSURE && p.z < MAXPRESSURE) {
+    int x = map(p.y, TS_TOP, TS_BOT, tft.width(), 0);
+    int y = map(p.x, TS_LEFT, TS_RT, 0, tft.height());
+
+    if (x > 105 && x < 155 && y > 170 && y < 200) {
+      ledState = true;
+      digitalWrite(LED_PIN, HIGH);
+      eyeOffset = 3;
+      drawEyes(eyeOffset);
+      drawMouth(true);
+    }
+
+    if (x > 165 && x < 215 && y > 170 && y < 200) {
+      ledState = false;
+      digitalWrite(LED_PIN, LOW);
+      eyeOffset = -3;
+      drawEyes(eyeOffset);
+      drawMouth(false);
+    }
+  }
+}

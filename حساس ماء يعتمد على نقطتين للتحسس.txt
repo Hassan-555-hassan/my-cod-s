@@ -1,0 +1,28 @@
+#define LED_PIN 2
+#define LOW_SENSOR 12   // الحساس السفلي
+#define HIGH_SENSOR 11  // الحساس العلوي
+
+bool ledState = LOW; // حالة الليد (مخزنة)
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(LOW_SENSOR, INPUT_PULLUP);   // يوصل مع الأرضي عند وجود ماء
+  pinMode(HIGH_SENSOR, INPUT_PULLUP);  // يوصل مع الأرضي عند وجود ماء
+}
+
+void loop() {
+  bool lowLevel = (digitalRead(LOW_SENSOR) == LOW);   // ماء واصل إلى 12
+  bool highLevel = (digitalRead(HIGH_SENSOR) == LOW); // ماء واصل إلى 11
+
+  // إذا الماء لم يصل للـ 12 → نشغل الليد
+  if (!lowLevel) {
+    ledState = HIGH;
+  }
+
+  // إذا الماء وصل للـ 11 → نطفي الليد
+  if (highLevel) {
+    ledState = LOW;
+  }
+
+  digitalWrite(LED_PIN, ledState);
+}

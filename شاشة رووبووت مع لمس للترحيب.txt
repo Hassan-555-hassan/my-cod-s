@@ -1,0 +1,177 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+#define GREEN       0x07E0
+#define BLACK       0x0000
+#define WHITE       0xFFFF
+#define CYAN        0x07FF
+#define RED         0xF800
+#define BLUE        0x001F
+#define EYE_COLOR   CYAN
+
+MCUFRIEND_kbv tft;
+
+#define YP A1
+#define XM A2
+#define YM 7
+#define XP 6
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+#define TS_LEFT 150
+#define TS_RT   920
+#define TS_TOP  120
+#define TS_BOT  900
+
+unsigned long lastWinkTime = 0;
+unsigned long messageTime = 0;
+int messageStage = 0;
+bool showHiPeriodically = false;
+unsigned long lastHiTime = 0;
+bool rightEyeOpen = true;
+bool inIntroMode = false;
+
+void setup() {
+  Serial.begin(9600);
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(1);
+  tft.fillScreen(BLACK);
+  drawFace();
+  messageTime = millis();
+  lastWinkTime = millis();
+}
+
+void drawFace() {
+  tft.fillScreen(BLACK);
+  tft.fillRoundRect(40, 80, 80, 40, 10, EYE_COLOR); // Left eye
+  if (rightEyeOpen) {
+    tft.fillRoundRect(200, 80, 80, 40, 10, EYE_COLOR); // Right eye
+  } else {
+    tft.fillRect(220, 100, 40, 5, EYE_COLOR); // Wink
+  }
+  tft.fillRoundRect(130, 180, 60, 8, 4, EYE_COLOR); // Mouth
+}
+
+// دالة لعرض النص في منتصف الشاشة أفقياً وعمودياً
+void showMessage(const char* text) {
+  tft.fillRect(0, 0, tft.width(), 40, BLACK); // تنظيف منطقة النص
+
+  tft.setTextColor(CYAN);
+  tft.setTextSize(2); // حجم الخط
+
+  int textLength = strlen(text);
+  int charWidth = 6 * 2;  // عرض الحرف تقريبا 12 بكسل (6*textSize)
+  int totalTextWidth = textLength * charWidth;
+
+  int x = (tft.width() - totalTextWidth) / 2; 
+
+  // لإظهار النص في منتصف عمودي ضمن 40 بكسل ارتفاع
+  int y = (40 - 16) / 2; // 16 بكسل تقريبا ارتفاع الخط عند الحجم 2
+
+  tft.setCursor(x, y);
+  tft.print(text);
+}
+
+void IntroScreen() {
+  tft.fillScreen(BLACK);
+  tft.setTextSize(3);
+  tft.setTextColor(RED);
+  // وضع النصوص مع التوسيط اليدوي
+  const char* line1 = "Hello  ";
+  const char* line2 = "beautiful ";
+  const char* line3 = "Hassan tqatqa";
+  
+
+  // حساب منتصف الشاشة أفقياً لكل سطر:
+  int x1 = (tft.width() - strlen(line1)*18) / 2; // 6*3=18 عرض الحرف مع الحجم 3
+  int x2 = (tft.width() - strlen(line2)*18) / 2;
+  int x3 = (tft.width() - strlen(line3)*12) / 2; // حجم 2 => 6*2=12
+ 
+
+  tft.setCursor(x1, 110);
+  tft.println(line1);
+
+  tft.setTextColor(GREEN);  // ✅ لتغيير اللون
+  tft.println(line2);
+
+  tft.setTextSize(2);
+  tft.setTextColor(BLUE);
+  tft.setCursor(x3, 220);
+  tft.println(line3);
+
+  tft.setTextColor(CYAN);
+ 
+
+  delay(4000);
+}
+
+void loop() {
+  TSPoint p = ts.getPoint();
+  pinMode(XM, OUTPUT);
+  pinMode(YP, OUTPUT);
+  digitalWrite(XM, LOW);
+  digitalWrite(YP, LOW);
+
+  unsigned long currentTime = millis();
+
+  if (!inIntroMode && p.z > MINPRESSURE && p.z < MAXPRESSURE) {
+    int x = map(p.y, TS_LEFT, TS_RT, 0, tft.width());
+    int y = map(p.x, TS_TOP, TS_BOT, 0, tft.height());
+
+    if (x >= 40 && x <= 280 && y >= 30 && y <= 210) {
+      inIntroMode = true;
+      IntroScreen();
+      drawFace();
+      messageTime = currentTime;
+      lastWinkTime = currentTime;
+      inIntroMode = false;
+      return;
+    }
+  }
+
+  if (!showHiPeriodically) {
+    switch (messageStage) {
+      case 0:
+        showMessage("Hello world");
+        messageTime = currentTime;
+        messageStage++;
+        break;
+      case 1:
+        if (currentTime - messageTime > 3000) {
+          showMessage("I'm robo_hassan");
+          messageTime = currentTime;
+          messageStage++;
+        }
+        break;
+      case 2:
+        if (currentTime - messageTime > 3000) {
+          showMessage("eng_hassan");
+          messageTime = currentTime;
+          messageStage++;
+          showHiPeriodically = true;
+          lastHiTime = currentTime;
+        }
+        break;
+    }
+  } else {
+    if (currentTime - lastHiTime > 30000) {
+      showMessage("eng_hassan");
+      lastHiTime = currentTime;
+      delay(3000);
+      showMessage("");
+    }
+  }
+
+  if (currentTime - lastWinkTime > 5000) {
+    rightEyeOpen = false;
+    drawFace();
+    delay(300);
+    rightEyeOpen = true;
+    drawFace();
+    lastWinkTime = currentTime;
+  }
+}

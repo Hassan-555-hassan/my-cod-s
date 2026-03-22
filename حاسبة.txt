@@ -1,0 +1,160 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+
+// تعريف أطراف التوصيل الخاصة باللمس
+#define YP A1
+#define XM A2
+#define YM 7
+#define XP 6
+
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+// معايرة اللمس من الزوايا الأربعة
+#define TS_MINX 230
+#define TS_MAXX 1016
+#define TS_MINY 250
+#define TS_MAXY 944
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+MCUFRIEND_kbv tft;
+
+// تعريف الألوان
+#define WHITE   0xFFFF
+#define BLACK   0x0000
+#define RED     0xF800
+#define GREEN   0x07E0
+#define BLUE    0x001F
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+
+// مصفوفة الرموز على الأزرار
+String symbol[4][4] = {
+  {"7", "8", "9", "/"},
+  {"4", "5", "6", "x"},
+  {"1", "2", "3", "-"},
+  {"C", "0", "=", "+"}
+};
+
+// متغيرات العمليات
+int X, Y;
+long Num1, Num2, Number;
+char action;
+boolean result = false;
+
+void setup() {
+  Serial.begin(9600);
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(4);  // ضبط دوران الشاشة
+  tft.fillScreen(BLACK);
+  drawButtons();
+}
+
+void loop() {
+  TSPoint p = waitTouch();
+  X = p.x;
+  Y = p.y;
+  handleTouch();
+  if (result) {
+    calculateResult();
+    showResult();
+    result = false;
+  }
+  delay(300);
+}
+
+// انتظار اللمس ومعايرة اللمس مع عكس محور Y فقط
+TSPoint waitTouch() {
+  TSPoint p;
+  do {
+    p = ts.getPoint();
+    pinMode(XM, OUTPUT);
+    pinMode(YP, OUTPUT);
+  } while ((p.z < MINPRESSURE) || (p.z > MAXPRESSURE));
+
+  int x = map(p.x, TS_MINX, TS_MAXX, 0, 240);
+  int y = map(p.y, TS_MINY, TS_MAXY, 320, 0);  // هنا عكسنا المحور Y
+
+  return TSPoint(x, y, p.z);
+}
+
+// معالجة اللمس بناءً على الموقع الصحيح للأزرار
+void handleTouch() {
+  int adjustedY = Y - 60;  
+  if (adjustedY < 0) adjustedY = 0;
+  int row = adjustedY / 60;
+  int col = X / 60;
+
+  if (row >= 0 && row < 4 && col >= 0 && col < 4) {
+    String val = symbol[row][col];
+    Serial.println("Pressed: " + val);
+
+    if (val == "C") {
+      Number = Num1 = Num2 = 0;
+      result = false;
+      showResult();
+    } else if (val == "+") {
+      action = '+';
+      Num1 = Number;
+      Number = 0;
+    } else if (val == "-") {
+      action = '-';
+      Num1 = Number;
+      Number = 0;
+    } else if (val == "x") {
+      action = '*';
+      Num1 = Number;
+      Number = 0;
+    } else if (val == "/") {
+      action = '/';
+      Num1 = Number;
+      Number = 0;
+    } else if (val == "=") {
+      Num2 = Number;
+      result = true;
+    } else {
+      int digit = val.toInt();
+      Number = Number * 10 + digit;
+      showResult();
+    }
+  }
+}
+
+// تنفيذ العملية الحسابية
+void calculateResult() {
+  if (action == '+') Number = Num1 + Num2;
+  else if (action == '-') Number = Num1 - Num2;
+  else if (action == '*') Number = Num1 * Num2;
+  else if (action == '/') Number = (Num2 != 0) ? Num1 / Num2 : 0;
+}
+
+// عرض النتيجة على الشاشة
+void showResult() {
+  tft.fillRect(0, 0, 240, 80, CYAN);
+  tft.setTextColor(BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(10, 25);
+  tft.print("        "); // لمسح الرقم السابق
+  tft.setCursor(10, 25);
+  tft.print(Number);
+}
+
+// رسم أزرار الحاسبة
+void drawButtons() {
+  for (int row = 0; row < 4; row++) {
+    for (int col = 0; col < 4; col++) {
+      int x = col * 60;
+      int y = 80 + row * 60;
+      tft.fillRect(x, y, 60, 60, BLUE);
+      tft.drawRect(x, y, 60, 60, WHITE);
+      tft.setTextColor(WHITE);
+      tft.setTextSize(3);
+      tft.setCursor(x + 15, y + 15);
+      tft.print(symbol[row][col]);
+    }
+  }
+  showResult();
+}

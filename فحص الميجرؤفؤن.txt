@@ -1,0 +1,10 @@
+int micPin = 34; // رجل الميكروفون
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  int value = analogRead(micPin);
+  Serial.println(value);
+  delay(50);
+}

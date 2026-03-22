@@ -1,0 +1,164 @@
+#include <BluetoothSerial.h>
+#include <math.h>
+BluetoothSerial BTSerial;
+
+// ---- المخرجات ----
+const int led_toggle1 = 2;
+const int led_toggle2 = 15;
+const int led_2s_1 = 18;
+const int led_2s_2 = 19;
+const int led_blink = 13;
+const int led_delay1 = 12;
+const int led_delay2 = 14;
+const int led_multiPress = 26;
+const int led_temp = 35;
+
+// ---- المداخل ----
+const int btn_toggle1 = 4;
+const int btn_toggle2 = 5;
+const int btn_2s_1 = 21;
+const int btn_2s_2 = 22;
+const int btn_reset = 32;
+const int btn_multiPress = 27;
+const int temp_sensor = 34;
+
+// ---- متغيرات الحالة ----
+bool led_toggle1_state = false;
+bool led_toggle2_state = false;
+bool led_2s_1_state = false;
+bool led_2s_2_state = false;
+bool led_delay1_state = false;
+bool led_delay2_state = false;
+
+// ---- مؤقتات ----
+unsigned long led_2s_1_prev = 0;
+unsigned long led_2s_2_prev = 0;
+unsigned long startMillis = 0;
+unsigned long blinkPrev = 0;
+bool blinkState = false;
+
+// ---- زر 3 ضغطات ----
+int multiPressCount = 0;
+unsigned long lastPress = 0;
+bool multiPressLedState = false;
+unsigned long multiPressLedStart = 0;
+
+void setup() {
+  Serial.begin(115200);
+  BTSerial.begin("ESP32_Light_Control");
+
+  // ---- مخرجات ----
+  pinMode(led_toggle1, OUTPUT);
+  pinMode(led_toggle2, OUTPUT);
+  pinMode(led_2s_1, OUTPUT);
+  pinMode(led_2s_2, OUTPUT);
+  pinMode(led_blink, OUTPUT);
+  pinMode(led_delay1, OUTPUT);
+  pinMode(led_delay2, OUTPUT);
+  pinMode(led_multiPress, OUTPUT);
+  pinMode(led_temp, OUTPUT);
+
+  // ---- مداخل ----
+  pinMode(btn_toggle1, INPUT_PULLUP);
+  pinMode(btn_toggle2, INPUT_PULLUP);
+  pinMode(btn_2s_1, INPUT_PULLUP);
+  pinMode(btn_2s_2, INPUT_PULLUP);
+  pinMode(btn_reset, INPUT_PULLUP);
+  pinMode(btn_multiPress, INPUT_PULLUP);
+  pinMode(temp_sensor, INPUT);
+
+  startMillis = millis();
+  Serial.println("Bluetooth ready...");
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // ---- قراءة البلوتوث ----
+  if (BTSerial.available()) {
+    char received = BTSerial.read();
+    Serial.print("Received: "); Serial.println(received);
+
+    switch(received) {
+      case 'A': led_toggle1_state = true; break;
+      case 'B': led_toggle1_state = false; break;
+      case 'C': led_toggle2_state = true; break;
+      case 'D': led_toggle2_state = false; break;
+      case 'E': led_2s_1_state = true; led_2s_1_prev = now; break;
+      case 'F': led_2s_2_state = true; led_2s_2_prev = now; break;
+    }
+  }
+
+  // ---- أزرار Toggle ----
+  if (digitalRead(btn_toggle1) == LOW) led_toggle1_state = !led_toggle1_state;
+  if (digitalRead(btn_toggle2) == LOW) led_toggle2_state = !led_toggle2_state;
+
+  // ---- أزرار 2 ثانية ----
+  if (digitalRead(btn_2s_1) == LOW) { led_2s_1_state = true; led_2s_1_prev = now; }
+  if (digitalRead(btn_2s_2) == LOW) { led_2s_2_state = true; led_2s_2_prev = now; }
+
+  if (led_2s_1_state && now - led_2s_1_prev >= 2000) led_2s_1_state = false;
+  if (led_2s_2_state && now - led_2s_2_prev >= 2000) led_2s_2_state = false;
+
+  // ---- وميض LED 13 ----
+  if (now - blinkPrev >= 1000) { blinkPrev = now; blinkState = !blinkState; }
+
+  // ---- مخرجات 12 و 14 بعد 5 ثواني ----
+  if (!led_delay1_state && now - startMillis >= 5000) {
+    led_delay1_state = true;
+    led_delay2_state = true;
+  }
+
+  // ---- زر Reset 32 ----
+  if (digitalRead(btn_reset) == LOW) {
+    startMillis = millis();
+    led_delay1_state = false;
+    led_delay2_state = false;
+  }
+
+  // ---- زر 3 ضغطات ----
+  handleMultiPress(btn_multiPress, led_multiPress, now);
+
+  // ---- حساس الحرارة ----
+  int adcValue = analogRead(temp_sensor);
+  float voltage = adcValue * (3.3 / 4095.0);
+  float resistance = (3.3 - voltage) * 10000 / voltage;
+  float tempC = 1 / (log(resistance / 10000.0) / 3950.0 + 1 / 298.15) - 273.15;
+  bool tempHigh = tempC > 60;
+
+  // ---- تحديث كل المخرجات ----
+  digitalWrite(led_toggle1, led_toggle1_state ? HIGH : LOW);
+  digitalWrite(led_toggle2, led_toggle2_state ? HIGH : LOW);
+  digitalWrite(led_2s_1, led_2s_1_state ? HIGH : LOW);
+  digitalWrite(led_2s_2, led_2s_2_state ? HIGH : LOW);
+  digitalWrite(led_blink, blinkState ? HIGH : LOW);
+  digitalWrite(led_delay1, led_delay1_state ? HIGH : LOW);
+  digitalWrite(led_delay2, led_delay2_state ? HIGH : LOW);
+  digitalWrite(led_multiPress, multiPressLedState ? HIGH : LOW);
+  digitalWrite(led_temp, tempHigh ? HIGH : LOW);
+}
+
+// ---- وظيفة زر 3 ضغطات ثابتة ----
+void handleMultiPress(int buttonPin, int ledPin, unsigned long now) {
+  static int pressCount = 0;
+  static unsigned long lastPress = 0;
+  static bool ledState = false;
+  static unsigned long ledStart = 0;
+
+  int reading = digitalRead(buttonPin);
+
+  if (reading == LOW && now - lastPress > 250) {
+    pressCount++;
+    lastPress = now;
+  }
+
+  if (pressCount == 3) {
+    multiPressLedState = true;
+    ledStart = now;
+    pressCount = 0;
+  }
+
+  if (multiPressLedState && now - ledStart >= 1000) multiPressLedState = false;
+
+  if (now - lastPress > 1000) pressCount = 0;
+}

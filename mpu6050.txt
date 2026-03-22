@@ -1,0 +1,65 @@
+#include <Wire.h>
+#include <MPU6050.h>  // مكتبة MPU6050 من jrowberg/I2Cdevlib
+
+MPU6050 mpu;
+
+// تعريف الدبوس المتصل بالـ LED
+const int ledPin = 2;  // استخدم الرجل D2 أو أي رجل أخرى
+
+void setup() {
+  // بدء الاتصال التسلسلي
+  Serial.begin(115200);
+
+  // تهيئة الاتصال بـ I2C
+  Wire.begin();
+
+  // بدء مستشعر MPU6050
+  mpu.initialize();
+
+  // التأكد من أن المستشعر يعمل بشكل صحيح
+  if (!mpu.testConnection()) {
+    Serial.println("فشل الاتصال بـ MPU6050");
+    while (1);
+  }
+
+  // تهيئة الـ LED
+  pinMode(ledPin, OUTPUT);
+  Serial.println("تهيئة المستشعر تم بنجاح!");
+}
+
+void loop() {
+  // قراءة البيانات من المستشعر
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+  
+  mpu.getAcceleration(&ax, &ay, &az);
+  mpu.getRotation(&gx, &gy, &gz);
+
+  // طباعة القيم على الشاشة التسلسلية
+  Serial.print("AX: "); Serial.print(ax);
+  Serial.print(" AY: "); Serial.print(ay);
+  Serial.print(" AZ: "); Serial.println(az);
+  
+  Serial.print("GX: "); Serial.print(gx);
+  Serial.print(" GY: "); Serial.print(gy);
+  Serial.print(" GZ: "); Serial.println(gz);
+
+  // تشغيل الـ LED إذا كانت القيمة في المحور X أكبر من حد معين (مثال: 1000)
+  if (abs(ax) > 10000) {
+    digitalWrite(ledPin, HIGH); // تشغيل الـ LED
+  } else {
+    digitalWrite(ledPin, LOW); // إيقاف الـ LED
+  }
+
+  delay(500); // تأخير 500 ملي ثانية بين كل قراءة
+}
+
+هنا طبق هذا اولا 
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+lib_deps = 
+	electroniccats/MPU6050@^1.4.3
+	adafruit/Adafruit MPU6050@^2.2.6
+	jrowberg/I2Cdevlib-MPU6050@^1.0.0

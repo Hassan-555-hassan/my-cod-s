@@ -1,0 +1,107 @@
+// --- تعريف المخارج والأزرار ---
+const int OUT_13 = 13;       // المخرج 13 (موجة مربعة)
+const int OUT_5 = 5;         // المخرج 5 (تأخير 5 ثواني)
+const int BTN_RESET_5 = 27;  // زر ريست للمخرج 5
+const int BTN_32 = 32;       // الزر للتحكم بالمخرج 4
+const int OUT_4 = 4;         // المخرج 4 (تشغيل بعد 5 ضغطات)
+
+// --- الموجة المربعة للمخرج 13 ---
+const unsigned long OUT13_ON = 5000;
+const unsigned long OUT13_OFF = 4000;
+unsigned long lastChange13 = 0;
+bool state13 = false;
+
+// --- المخرج 5 بعد 5 ثواني + ريست ---
+const unsigned long OUT5_DELAY = 5000;
+unsigned long startTime5;
+bool state5 = false;
+
+// --- الزر 32 والمخرج 4 ---
+const int pressThreshold = 5;
+int pressCount = 0;
+bool lastButtonState = HIGH;
+unsigned long lastPressTime = 0;
+const unsigned long pressDelay = 1500; // 1.5 ثانية بين كل ضغطة
+unsigned long output4StartTime = 0;
+bool output4State = false;
+const unsigned long output4Duration = 5000; // تشغيل 5 ثوانٍ
+
+void setup() {
+  pinMode(OUT_13, OUTPUT);
+  digitalWrite(OUT_13, LOW);
+
+  pinMode(OUT_5, OUTPUT);
+  digitalWrite(OUT_5, LOW);
+
+  pinMode(OUT_4, OUTPUT);
+  digitalWrite(OUT_4, LOW);
+
+  pinMode(BTN_RESET_5, INPUT_PULLUP);
+  pinMode(BTN_32, INPUT_PULLUP);
+
+  lastChange13 = millis();
+  startTime5 = millis();
+
+  Serial.begin(115200);
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // --- الموجة المربعة للمخرج 13 ---
+  if (state13 && (now - lastChange13 >= OUT13_ON)) {
+    state13 = false;
+    digitalWrite(OUT_13, LOW);
+    lastChange13 = now;
+  } 
+  else if (!state13 && (now - lastChange13 >= OUT13_OFF)) {
+    state13 = true;
+    digitalWrite(OUT_13, HIGH);
+    lastChange13 = now;
+  }
+
+  // --- المخرج 5 بعد 5 ثواني ---
+  if (!state5 && (now - startTime5 >= OUT5_DELAY)) {
+    state5 = true;
+    digitalWrite(OUT_5, HIGH);
+  }
+
+  // --- زر ريست للمخرج 5 ---
+  if (digitalRead(BTN_RESET_5) == LOW) {
+    state5 = false;
+    digitalWrite(OUT_5, LOW);
+    startTime5 = now;  // إعادة العد من جديد
+  }
+
+  // --- قراءة زر 32 للتحكم بالمخرج 4 ---
+  bool currentState = digitalRead(BTN_32);
+
+  if (lastButtonState == HIGH && currentState == LOW) { // تم الضغط
+    if (now - lastPressTime >= pressDelay) {
+      pressCount++;
+      lastPressTime = now;
+      Serial.print("Press count: ");
+      Serial.println(pressCount);
+
+      if (pressCount >= pressThreshold) {
+        output4State = true;
+        output4StartTime = now;
+        pressCount = 0;
+        Serial.println("Output 4 HIGH!");
+      }
+    }
+  }
+  lastButtonState = currentState;
+
+  // --- إدارة تشغيل المخرج 4 بدون delay ---
+  if (output4State && (now - output4StartTime >= output4Duration)) {
+    output4State = false;
+    digitalWrite(OUT_4, LOW);
+    Serial.println("Output 4 LOW!");
+  }
+
+  // --- كتابة حالة المخرج 4 ---
+  if (output4State) {
+    digitalWrite(OUT_4, HIGH);
+  }
+}

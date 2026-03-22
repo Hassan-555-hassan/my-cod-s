@@ -1,0 +1,133 @@
+#include <SPI.h>
+#include <SD.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_TFTLCD.h>
+
+// تعريف أرجل الشاشة
+#define LCD_CS   A3
+#define LCD_CD   A2
+#define LCD_WR   A1
+#define LCD_RD   A0
+#define LCD_RST  A4
+#define SD_CS    10
+
+Adafruit_TFTLCD tft(LCD_CS, LCD_CD, LCD_WR, LCD_RD, LCD_RST);
+
+// دوال مساعدة لقراءة الـ BMP
+uint16_t read16(File &f) {
+  uint16_t result;
+  result = f.read();
+  result |= (f.read() << 8);
+  return result;
+}
+
+uint32_t read32(File &f) {
+  uint32_t result;
+  result = f.read();
+  result |= (f.read() << 8);
+  result |= (f.read() << 16);
+  result |= (f.read() << 24);
+  return result;
+}
+
+bool drawBMP_Rotate90(const char *filename, int x, int y) {
+  File bmpFile;
+  int bmpWidth, bmpHeight;
+  uint8_t bmpDepth;
+  uint32_t bmpImageoffset, rowSize;
+  bool flip = true;
+
+  bmpFile = SD.open(filename);
+  if (!bmpFile) {
+    Serial.println("فشل في فتح الصورة");
+    return false;
+  }
+
+  if (read16(bmpFile) != 0x4D42) {
+    Serial.println("الملف ليس BMP");
+    bmpFile.close();
+    return false;
+  }
+
+  (void)read32(bmpFile); // الحجم
+  (void)read32(bmpFile); // محجوز
+  bmpImageoffset = read32(bmpFile);
+  (void)read32(bmpFile); // DIB
+  bmpWidth = read32(bmpFile);
+  bmpHeight = read32(bmpFile);
+  if (read16(bmpFile) != 1) return false;
+
+  bmpDepth = read16(bmpFile);
+  if (bmpDepth != 24) {
+    Serial.println("فقط BMP 24‑bit مدعومة");
+    bmpFile.close();
+    return false;
+  }
+
+  if (read32(bmpFile) != 0) {
+    Serial.println("الصورة مضغوطة");
+    bmpFile.close();
+    return false;
+  }
+
+  rowSize = (bmpWidth * 3 + 3) & ~3;
+  if (bmpHeight < 0) {
+    bmpHeight = -bmpHeight;
+    flip = false;
+  }
+
+  for (int row = 0; row < bmpHeight; row++) {
+    uint32_t pos = flip ?
+      bmpImageoffset + (bmpHeight - 1 - row) * rowSize :
+      bmpImageoffset + row * rowSize;
+
+    if (bmpFile.position() != pos) bmpFile.seek(pos);
+
+    for (int col = 0; col < bmpWidth; col++) {
+      uint8_t b = bmpFile.read();
+      uint8_t g = bmpFile.read();
+      uint8_t r = bmpFile.read();
+      uint16_t color = tft.color565(r, g, b);
+
+      // هنا التدوير 90 درجة
+      tft.drawPixel(x + row, y + (bmpWidth - 1 - col), color);
+    }
+  }
+
+  bmpFile.close();
+  return true;
+}
+
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("بدء تشغيل الشاشة...");
+
+  tft.reset();
+  uint16_t ID = tft.readID();
+  if (ID == 0x9325 || ID == 0x9341 || ID == 0x9486) {
+    tft.begin(ID);
+  } else {
+    tft.begin(0x9341); // افتراضي
+  }
+
+  tft.setRotation(1);
+  tft.fillScreen(0x0000); // خلفية سوداء
+
+  if (!SD.begin(SD_CS)) {
+    Serial.println("فشل في تهيئة بطاقة SD");
+    return;
+  }
+
+  Serial.println("بطاقة SD تم التعرف عليها");
+
+if (drawBMP_Rotate90("skull.bmp", 0, 0)) {
+  Serial.println("✅ تم عرض الصورة بنجاح!");
+} else {
+  Serial.println("❌ فشل في عرض الصورة!");
+}
+}
+
+void loop() {
+  // لا شيء
+}

@@ -1,0 +1,15 @@
+#include <Stepper.h>
+
+const int stepsPerRevolution = 200; // عدد الخطوات لكل دورة
+
+// تعريف المحرك على Pins 8,9,10,11
+Stepper myStepper(stepsPerRevolution, 8, 9, 10, 11);
+
+void setup() {
+  myStepper.setSpeed(120); // سرعة ثابتة بالدورات/دقيقة
+}
+
+void loop() {
+  myStepper.step(1);  // خطوة واحدة
+  // بدون أي delay => يجعل المحرك يدور بسلاسة أكبر
+}

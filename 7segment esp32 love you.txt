@@ -1,0 +1,95 @@
+#include <Arduino.h>
+
+// توزيع المصابيح (segments) حسب التوصيل
+const int segments[7] = {
+  19, // A (أعلى)
+  14, // B (أعلى يمين)
+  12, // C (أسفل يمين)
+  32, // D (أسفل)
+  13, // E (أسفل يسار)
+  21, // F (أعلى يسار)
+  23  // G (المنتصف)
+};
+
+// توزيع الخانات (digits) السالبة
+const int digits[4] = {
+  5,   // الخانة الأولى
+  4,   // الخانة الثانية
+  15,  // الخانة الثالثة
+  18   // الخانة الرابعة
+};
+
+// الحرف Y
+const byte Y[7] = {0, 1, 1, 0, 0, 0, 1};  // B, C, G
+// الحرف O
+const byte O[7] = {1, 1, 1, 1, 1, 1, 0};  // A, B, C, D, E, F
+// الحرف U
+const byte U[7] = {0, 0, 1, 1, 1, 1, 0};  // C, D, E, F
+// الحرف L
+const byte L[7] = {0, 0, 1, 1, 1, 0, 0};  // C, D, E
+// الحرف V
+const byte V[7] = {0, 0, 1, 1, 1, 1, 0};  // C, D, E, F (مثل U)
+const byte E[7] = {1, 0, 0, 1, 1, 1, 1};  // A, D, E, F, G
+const byte blank[7] = {0, 0, 0, 0, 0, 0, 0}; // فراغ
+
+// كلمتا YOU و LOVE
+const byte letters_you[4][7] = {
+  {0, 1, 1, 1, 0, 1, 1}, // Y
+  {1, 1, 1, 1, 1, 1, 0}, // O
+  {0, 1, 1, 1, 1, 1, 0}, // U
+  {0, 0, 0, 0, 0, 0, 0}  // فراغ
+};
+
+const byte letters_love[4][7] = {
+  {0, 0, 0, 1, 1, 1, 0}, // L
+  {1, 1, 1, 1, 1, 1, 0}, // O
+  {0, 1, 1, 1, 1, 1, 0}, // V
+  {1, 0, 0, 1, 1, 1, 1}  // E
+};
+
+unsigned long previousMillis = 0;
+bool showLove = false;
+
+void setup() {
+  for (int i = 0; i < 7; i++) {
+    pinMode(segments[i], OUTPUT);
+    digitalWrite(segments[i], LOW); // إطفاء المصابيح
+  }
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(digits[i], OUTPUT);
+    digitalWrite(digits[i], HIGH); // إطفاء الخانات (سالب غير موصول)
+  }
+}
+
+void displayLetter(const byte letter[7], int digitIndex) {
+  // إطفاء جميع الخانات
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(digits[i], HIGH);
+  }
+
+  // ضبط المصابيح حسب الحرف
+  for (int i = 0; i < 7; i++) {
+    digitalWrite(segments[i], letter[i] ? HIGH : LOW);
+  }
+
+  // تفعيل الخانة المطلوبة (سالب نشط)
+  digitalWrite(digits[digitIndex], LOW);
+  delay(3); // عرض قصير لكل خانة
+  digitalWrite(digits[digitIndex], HIGH); // إطفاء الخانة
+}
+
+void loop() {
+  const byte (*currentWord)[7] = showLove ? letters_love : letters_you;
+
+  // عرض الأحرف الأربعة بتكرار سريع لتظهر كلها
+  for (int i = 0; i < 4; i++) {
+    displayLetter(currentWord[i], i);
+  }
+
+  // التبديل بين الكلمتين كل 3 ثواني
+  if (millis() - previousMillis >= 3000) {
+    previousMillis = millis();
+    showLove = !showLove;
+  }
+}

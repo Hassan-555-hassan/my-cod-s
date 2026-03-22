@@ -1,0 +1,54 @@
+#define BLYNK_PRINT Serial
+
+#define BLYNK_TEMPLATE_ID "TMPL6cUWo1AQ-"
+#define BLYNK_TEMPLATE_NAME "ESP32 Test"
+#define BLYNK_AUTH_TOKEN "3WpMVKm7O5QsPx1BVmBzFdHRe71sPhiv"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "Rami2.4G";
+char pass[] = "RAMI1985rami";
+
+// ===== عدد المخارج (غير هنا فقط) =====
+#define NUM_OUTPUTS 2   // يمكنك جعله 8 أو 16 أو أكثر
+
+// ===== ضع أرقام الأرجل هنا =====
+int outputPins[NUM_OUTPUTS] = {23, 2,};
+
+// =====================================
+
+void setup() {
+  Serial.begin(115200);
+
+  // تهيئة جميع المخارج
+  for (int i = 0; i < NUM_OUTPUTS; i++) {
+    pinMode(outputPins[i], OUTPUT);
+    digitalWrite(outputPins[i], LOW);
+  }
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+}
+
+// هذه الدالة تستقبل جميع أزرار Blynk تلقائياً
+BLYNK_WRITE_DEFAULT() {
+
+  int virtualPin = request.pin;   // رقم VPin
+  int state = param.asInt();      // 0 أو 1
+
+  int index = virtualPin;         // V0 يتحكم في أول مخرج
+
+  if (index < NUM_OUTPUTS) {
+
+    digitalWrite(outputPins[index], state);
+
+    Serial.print("GPIO ");
+    Serial.print(outputPins[index]);
+    Serial.print(" = ");
+    Serial.println(state);
+  }
+}
+
+void loop() {
+  Blynk.run();
+}

@@ -1,0 +1,157 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+
+#define YP A1
+#define XM A2
+#define YM 7
+#define XP 6
+
+#define WHITE   0x0000
+#define YELLOW  0x001F
+#define CYAN    0xF800
+#define PINK    0x07E0
+#define RED     0x07FF
+#define GREEN   0xF81F
+#define BLUE    0xFFE0
+#define BLACK   0xFFFF
+
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+#define TS_MINX 230
+#define TS_MAXX 1016
+#define TS_MINY 250
+#define TS_MAXY 944
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+MCUFRIEND_kbv tft;
+
+String symbol[4][4] = {
+  { "7", "8", "9", },
+  { "4", "5", "6",  },
+  { "1", "2", "3", },
+  { "C", "0", "Ent", }
+};
+
+int X, Y;
+long Number = 0;
+String password = "559851";
+bool accessGranted = false;
+
+void setup() {
+  Serial.begin(9600);
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(4);
+  tft.fillScreen(WHITE);
+  pinMode(12, OUTPUT); // للتحكم في الجهاز
+  pinMode(10, OUTPUT); // للزمور
+  digitalWrite(12, LOW); // في البداية موقوف
+  drawButtons();
+}
+
+void loop() {
+  TSPoint p = waitTouch();
+  X = p.x;
+  Y = p.y;
+  handleTouch();
+  delay(300);
+}
+
+TSPoint waitTouch() {
+  TSPoint p;
+  do {
+    p = ts.getPoint();
+    pinMode(XM, OUTPUT);
+    pinMode(YP, OUTPUT);
+  } while ((p.z < MINPRESSURE) || (p.z > MAXPRESSURE));
+
+  int x = map(p.x, TS_MINX, TS_MAXX, 0, 240);
+  int y = map(p.y, TS_MINY, TS_MAXY, 320, 0);
+  return TSPoint(x, y, p.z);
+}
+
+void handleTouch() {
+  int adjustedY = Y - 133;
+  if (adjustedY < 0) return;
+
+  int row = adjustedY / 60;
+  int col = X / 60;
+
+  if (row >= 0 && row < 4 && col >= 0 && col < 4) {
+    String val = symbol[row][col];
+    if (val == "") return;
+    Serial.println("Pressed: " + val);
+
+    if (val == "C") {
+      Number = 0;
+      showResult();
+      if (accessGranted) {
+        digitalWrite(12, LOW);     // إيقاف المخرج 12
+        accessGranted = false;
+      }
+    } else if (val == "Ent") {
+      String entered = String(Number);
+      if (entered == password) {
+        digitalWrite(12, HIGH);    // تفعيل المخرج
+        tone(10, 1000, 200);       // زمور خفيف
+        delay(250);
+        noTone(10);
+        accessGranted = true;
+      }
+      Number = 0;
+      showResult();
+    } else {
+      int digit = val.toInt();
+      Number = Number * 10 + digit;
+      showResult();
+    }
+  }
+}
+
+void showResult() {
+  tft.fillRect(0, 0, 240, 80, RED);
+  tft.setTextColor(WHITE);
+  tft.setTextSize(3);
+  tft.setCursor(10, 25);
+  tft.print("        ");
+  tft.setCursor(10, 25);
+  tft.print(Number);
+}
+
+void drawButtons() {
+  const int radius = 25;
+  const int spacing = 8;
+  const int startY = 85;
+
+  for (int row = 0; row < 4; row++) {
+    for (int col = 0; col < 3; col++) {
+      int x = col * (radius * 2 + spacing) + radius + spacing;
+      int y = startY + row * (radius * 2 + spacing) + radius;
+
+      String label = symbol[row][col];
+      if (label == "") continue;
+
+      uint16_t bgColor = BLACK;
+      uint16_t txtColor = WHITE;
+
+      if (label == "C") {
+        bgColor = CYAN;
+      } else if (label == "Ent") {
+        bgColor = RED;
+      }
+
+      tft.fillCircle(x, y, radius, bgColor);
+      tft.drawCircle(x, y, radius, WHITE);
+
+      tft.setTextColor(txtColor);
+      tft.setTextSize(2);
+      int txtX = x - (label.length() * 6);
+      int txtY = y - 8;
+      tft.setCursor(txtX, txtY);
+      tft.print(label);
+    }
+  }
+  showResult();
+}

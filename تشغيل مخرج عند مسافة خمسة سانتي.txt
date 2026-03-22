@@ -1,0 +1,43 @@
+// تعريف الأرجل
+const int trigPin = 15;
+const int echoPin = 16;
+const int outputPin = 2; // المخرج الذي سيتم تفعيله عند الاقتراب
+
+long duration;
+float distanceCm;
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(outputPin, OUTPUT); // ضبط البن 2 كمخرج
+}
+
+void loop() {
+  // إرسال النبضة
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // قراءة زمن العودة
+  duration = pulseIn(echoPin, HIGH);
+  distanceCm = duration * 0.034 / 2;
+
+  // طباعة المسافة للتأكد
+  Serial.print("Distance: ");
+  Serial.print(distanceCm);
+  Serial.println(" cm");
+
+  // الشرط المطلوب: إذا كانت المسافة 5 سم أو أقل
+  if (distanceCm > 0 && distanceCm <= 5) {
+    digitalWrite(outputPin, HIGH); // تشغيل المخرج
+    Serial.println("--- Object Detected! Output ON ---");
+  } else {
+    digitalWrite(outputPin, LOW);  // إطفاء المخرج
+  }
+
+  delay(200); // تقليل التأخير لزيادة سرعة الاستجابة
+}

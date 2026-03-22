@@ -1,0 +1,46 @@
+#include <Arduino.h>
+
+// تعريف الأطراف (Pins)
+const int ledPin = 23;     // الطرف المتصل بالـ LED
+const int increaseBtn = 22; // الطرف المتصل بزر الزيادة
+const int decreaseBtn = 21; // الطرف المتصل بزر النقصان
+
+// متغيرات البرنامج
+int brightness = 0;        // شدة الإضاءة (0-255)
+const int step = 25;        // خطوة تغيير شدة الإضاءة
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50; // وقت إزالة الارتداد
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  pinMode(increaseBtn, INPUT_PULLUP);
+  pinMode(decreaseBtn, INPUT_PULLUP);
+  
+  Serial.begin(115200);
+  Serial.println("برنامج التحكم في شدة إضاءة LED");
+}
+
+void loop() {
+  // قراءة حالة الأزرار مع تطبيق إزالة الارتداد (Debounce)
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(increaseBtn) == LOW) {
+      brightness += step;
+      if (brightness > 255) brightness = 255;
+      analogWrite(ledPin, brightness);
+      Serial.print("شدة الإضاءة: ");
+      Serial.println(brightness);
+      lastDebounceTime = millis();
+      delay(200); // تأخير بسيط لتجنب الضغطات المتعددة
+    }
+    
+    if (digitalRead(decreaseBtn) == LOW) {
+      brightness -= step;
+      if (brightness < 0) brightness = 0;
+      analogWrite(ledPin, brightness);
+      Serial.print("شدة الإضاءة: ");
+      Serial.println(brightness);
+      lastDebounceTime = millis();
+      delay(200); // تأخير بسيط لتجنب الضغطات المتعددة
+    }
+  }
+}

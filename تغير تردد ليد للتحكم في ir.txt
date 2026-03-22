@@ -1,0 +1,32 @@
+const int ledPin = 9;   // خرج على الطرف 9
+const long freq = 40000; // التردد المطلوب (مثلاً 38000 Hz)
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+
+  if (freq < 1000) {
+    // للترددات البطيئة مثل 10Hz
+  } else {
+    setupPWM_Timer1(freq); // إعداد Timer1 للطرف 9
+  }
+}
+
+void loop() {
+  if (freq < 1000) {
+    digitalWrite(ledPin, HIGH);
+    delay(1000 / (freq * 2));
+    digitalWrite(ledPin, LOW);
+    delay(1000 / (freq * 2));
+  }
+}
+
+// دالة إعداد Timer1 للتردد المطلوب
+void setupPWM_Timer1(long frequency) {
+  long top = (16000000 / (2 * frequency)) - 1; // حساب TOP
+
+  // Timer1: CTC mode + Toggle on Compare Match
+  TCCR1A = _BV(COM1A0);
+  TCCR1B = _BV(WGM12) | _BV(CS10);
+
+  OCR1A = top; // ضبط التردد
+}

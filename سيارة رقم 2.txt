@@ -1,0 +1,77 @@
+#include <BluetoothSerial.h>
+
+// تفعيل مكتبة البلوتوث
+BluetoothSerial BTSerial;
+
+// تعريف دبابيس المخارج
+int outputs[] = {15, 18, 25, 27};
+int numOutputs = sizeof(outputs) / sizeof(outputs[0]);
+
+void setup() {
+  Serial.begin(115200);
+  BTSerial.begin("ESP32_H_Control"); // اسم البلوتوث الذي سيظهر على الهاتف
+
+  // إعداد جميع المخارج كمخارج رقمية
+  for (int i = 0; i < numOutputs; i++) {
+    pinMode(outputs[i], OUTPUT);
+    digitalWrite(outputs[i], LOW);
+  }
+
+  Serial.println("Bluetooth is ready. Waiting for commands...");
+}
+
+void loop() {
+  // التحقق من وجود بيانات من البلوتوث
+  if (BTSerial.available()) {
+    char received = BTSerial.read();
+    Serial.print("Received: ");
+    Serial.println(received);
+
+    // إيقاف كل شيء عند الرقم 0
+    if (received == '0') {
+      for (int i = 0; i < numOutputs; i++) {
+        digitalWrite(outputs[i], LOW);
+      }
+      Serial.println("All outputs OFF");
+    }
+
+    // الحالة 1: تشغيل 15،18،19،23
+    else if (received == '1') {
+      turnOffAll();
+      digitalWrite(15, HIGH);
+      digitalWrite(18, HIGH);
+      Serial.println("Mode 1: Outputs 15,18, ON");
+    }
+
+    // الحالة 2: تشغيل 23،13،12،27
+    else if (received == '2') {
+      turnOffAll();
+      digitalWrite(27, HIGH);
+      digitalWrite(25, HIGH);
+      Serial.println("Mode 2: Outputs 25,27 ON");
+    }
+
+    // الحالة 3: تشغيل 13،23،18،15
+    else if (received == '3') {
+      turnOffAll();
+      digitalWrite(27, HIGH);
+      digitalWrite(15, HIGH);
+      Serial.println("Mode 3: Outputs 27,15 ON");
+    }
+
+    // الحالة 4: تشغيل 19،23،12،17
+    else if (received == '4') {
+      turnOffAll();
+      digitalWrite(25, HIGH);
+      digitalWrite(18, HIGH);
+      Serial.println("Mode 4: Outputs 18,25 ON");
+    }
+  }
+}
+
+// دالة لإيقاف جميع المخارج
+void turnOffAll() {
+  for (int i = 0; i < numOutputs; i++) {
+    digitalWrite(outputs[i], LOW);
+  }
+}

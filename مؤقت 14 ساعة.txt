@@ -1,0 +1,42 @@
+const int LED_PIN = 4;
+const unsigned long DELAY_TIME = 50400000UL; // 1 ساعة = 3600 ثانية = 3,600,000 مللي ثانية
+
+unsigned long startMillis;
+unsigned long lastLog = 0;
+bool ledOn = false;
+uint32_t bootCount = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  // عداد البوت فقط للانتباه — يزداد بعد كل Reset ضمن نفس تشغيل الفلاشر
+  bootCount++;
+  startMillis = millis();
+  Serial.println();
+  Serial.println("=== START ===");
+  Serial.print("Boot count: "); Serial.println(bootCount);
+  Serial.println("Waiting 14 hour to turn LED on...");
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // شغّل الليد بعد مرور DELAY_TIME من بدء التشغيل (يعمل مع overflow بشكل آمن)
+  if (!ledOn && (now - startMillis >= DELAY_TIME)) {
+    digitalWrite(LED_PIN, HIGH);
+    ledOn = true;
+    Serial.println("LED turned ON after 14 hour.");
+  }
+
+  // طبّع حالة التشغيل كل دقيقة (تشخيص)
+  if (now - lastLog >= 60000UL) {
+    lastLog = now;
+    unsigned long upSeconds = (now - startMillis) / 1000UL;
+    Serial.print("Uptime (s): "); Serial.println(upSeconds);
+    Serial.print("LED state: "); Serial.println(ledOn ? "ON" : "OFF");
+  }
+
+  // هنا يمكنك إضافة كود آخر دون مشكلة (لا نستخدم delay)
+}

@@ -1,0 +1,32 @@
+#define BLYNK_PRINT Serial
+
+#define BLYNK_TEMPLATE_ID "TMPL6cUWo1AQ-"
+#define BLYNK_TEMPLATE_NAME "ESP32 Test"
+#define BLYNK_AUTH_TOKEN "3WpMVKm7O5QsPx1BVmBzFdHRe71sPhiv"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "Rami2.4G";
+char pass[] = "RAMI1985rami";
+
+#define OUT_PIN 2
+
+BLYNK_WRITE(V0) {
+  int state = param.asInt();
+  digitalWrite(OUT_PIN, state);
+  Serial.print("GPIO2 = ");
+  Serial.println(state);
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(OUT_PIN, OUTPUT);
+  digitalWrite(OUT_PIN, LOW);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+}
+
+void loop() {
+  Blynk.run();
+}

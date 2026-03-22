@@ -1,0 +1,113 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+
+#define BLACK   0x0000
+#define WHITE   0xFFFF
+#define CYAN    0x07FF
+
+MCUFRIEND_kbv tft;
+
+// متغيرات التحكم
+unsigned long lastWinkTime = 0;
+unsigned long messageTime = 0;
+int messageStage = 0;
+bool showHiPeriodically = false;
+unsigned long lastHiTime = 0;
+bool rightEyeOpen = true;
+
+void setup() {
+  Serial.begin(9600);
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(1);
+  tft.fillScreen(BLACK);
+
+  // بدء تشغيل الوجه
+  drawFace();
+  messageTime = millis(); // بدء توقيت الرسائل
+  lastWinkTime = millis(); // بدء توقيت الغمز
+}
+
+void drawFace() {
+  // مسح وإعادة رسم الوجه
+  tft.fillRect(0, 0, 320, 240, BLACK);
+
+  // العين اليسرى (ثابتة مفتوحة)
+  tft.fillCircle(80, 100, 40, WHITE);
+  tft.fillRect(40, 100, 80, 40, BLACK);
+
+  // العين اليمنى (تغمز أو تفتح)
+  if(rightEyeOpen) {
+    tft.fillCircle(240, 100, 40, WHITE);
+    tft.fillRect(200, 100, 80, 40, BLACK);
+  } else {
+    tft.fillRect(220, 90, 40, 5, WHITE); // عين مغمضة
+  }
+
+  // رسم الفم (خط مستقيم)
+  tft.fillRect(130, 180, 60, 5, WHITE);
+}
+
+void showMessage(const char* text) {
+  tft.fillRect(50, 20, 220, 20, BLACK); // مسح منطقة الرسالة
+  tft.setTextColor(CYAN);
+  tft.setTextSize(2);
+  tft.setCursor(50, 20);
+  tft.print(text);
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+
+  // تسلسل الرسائل الأولي
+  if (!showHiPeriodically) {
+    switch(messageStage) {
+      case 0: // "Hello"
+        showMessage("Hello world");
+        messageTime = currentTime;
+        messageStage++;
+        break;
+        
+      case 1: // بعد 3 ثواني "I am Eilik"
+        if (currentTime - messageTime > 3000) {
+          showMessage("I'm robo_hassan");
+          messageTime = currentTime;
+          messageStage++;
+        }
+        break;
+        
+      case 2: // بعد 3 ثواني أخرى "Hi"
+        if (currentTime - messageTime > 3000) {
+          showMessage("eng_hassan");
+          messageTime = currentTime;
+          messageStage++;
+          showHiPeriodically = true;
+          lastHiTime = currentTime;
+        }
+        break;
+    }
+  }
+  else {
+    // عرض "Hi" كل 30 ثانية
+    if (currentTime - lastHiTime > 30000) {
+      showMessage("eng_hassan");
+      lastHiTime = currentTime;
+      delay(3000); // عرض لمدة 3 ثواني
+      showMessage(""); // مسح الرسالة
+    }
+  }
+
+  // غمزة العين اليمنى كل 5 ثواني
+  if (currentTime - lastWinkTime > 5000) {
+    rightEyeOpen = !rightEyeOpen; // تبديل حالة العين
+    drawFace();
+    
+    if(!rightEyeOpen) {
+      delay(300); // مدة الغمزة
+      rightEyeOpen = true;
+      drawFace();
+    }
+    
+    lastWinkTime = currentTime;
+  }
+}

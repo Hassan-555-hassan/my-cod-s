@@ -1,0 +1,111 @@
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+#include <TouchScreen.h>
+#include <MCUFRIEND_kbv.h>
+#include <Adafruit_GFX.h>
+
+#define BLACK   0x0000
+#define BLUE    0x001F
+#define RED     0xF800
+#define GREEN   0x07E0
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+#define WHITE   0xFFFF
+
+
+MCUFRIEND_kbv tft;
+#define LED_PIN 10
+
+// إعداد شاشة اللمس
+#define YP A1   // يجب أن تتأكد من هذه القيم حسب شاشتك
+#define XM A2
+#define YM 7
+#define XP 6
+
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+
+#define MINPRESSURE 10
+#define MAXPRESSURE 1000
+
+// حجم الشاشة
+#define TS_LEFT 150
+#define TS_RT   920
+#define TS_TOP  120
+#define TS_BOT  900
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(9600);
+
+  uint16_t ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(1); // العرض أفقي
+  tft.fillScreen(BLACK);
+  tft.setTextColor(WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(60, 20);
+  tft.print("Hello World im hassan");
+
+ 
+  // رسم زر التشغيل
+  tft.fillRect(60, 80, 100, 40, GREEN);
+  tft.setCursor(75, 90);
+  tft.setTextColor(BLACK);
+  tft.print("ON");
+
+  // رسم زر الإيقاف
+  tft.fillRect(180, 80, 100, 40, RED);
+  tft.setCursor(195, 90);
+  tft.setTextColor(BLACK);
+  tft.print("OFF");
+}
+
+void loop() {
+  TSPoint p = ts.getPoint();
+
+  pinMode(XM, OUTPUT);
+  pinMode(YP, OUTPUT);
+
+  if (p.z > MINPRESSURE && p.z < MAXPRESSURE) {
+    // تحويل الإحداثيات
+ int x = map(p.y, TS_TOP, TS_BOT, tft.width(), 0);   // عكس الاتجاه الأفقي
+int y = map(p.x, TS_LEFT, TS_RT, 0, tft.height());  // الاتجاه العمودي سليم
+
+
+    if (x > 20 && x < 120 && y > 80 && y < 120) {
+      digitalWrite(LED_PIN, HIGH); // تشغيل
+    }
+    if (x > 180 && x < 280 && y > 80 && y < 120) {
+      digitalWrite(LED_PIN, LOW);  // إيقاف
+    }
+  }
+}  
+
+
+
+
+
+التوصيل
+
+Arduino Nano
+LCD_RST	A4
+LCD_CS	A3
+LCD_RS	A2
+LCD_WR	A1
+LCD_RD	A0
+LCD_D0	D8
+LCD_D1	D9
+LCD_D2	D2
+LCD_D3	D3
+LCD_D4	D4
+LCD_D5	D5
+LCD_D6	D6
+LCD_D7	D7
+VCC	5V
+GND	GND
+SCK	D13	ساعة SPI (SPI Clock)
+DI	D11	بيانات داخلية (MOSI)
+DO	D12	بيانات خارجية (MISO)
+SS	D10	
+sku mar2406 

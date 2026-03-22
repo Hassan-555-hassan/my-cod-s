@@ -1,0 +1,54 @@
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
+int pwmChannel = 0;     // قناة PWM
+int pwmFreq = 5000;       // التردد 5000 هرتز
+int pwmResolution = 8;  // دقة PWM (0-255)
+int speakerPin = 18;    // المخرج المتصل بالسماعة
+
+void setup() {
+  Serial.begin(115200);
+  SerialBT.begin("ESP32_Audio"); // اسم البلوتوث اللي رح يظهر
+
+  // إعداد PWM
+  ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(speakerPin, pwmChannel);
+
+  // افتراضياً مطفي
+  ledcWrite(pwmChannel, 0);
+
+  Serial.println("Bluetooth ready. Send 1=ON, 0=OFF");
+}
+
+void loop() {
+  if (SerialBT.available()) {
+    char c = SerialBT.read();
+
+    if (c == '1') {
+      ledcWrite(pwmChannel, 128); // Duty Cycle 50% (تشغيل السماعة)
+      Serial.println("Speaker ON");
+    } 
+    else if (c == '0') {
+      ledcWrite(pwmChannel, 0);   // إيقاف
+      Serial.println("Speaker OFF");
+    }
+  }
+}
+
+
+
+
+
+
+
+platformal ini 
+[env:esp32doit-devkit-v1]
+platform = espressif32
+board = esp32doit-devkit-v1
+framework = arduino
+
+build_flags = 
+    -DCORE_DEBUG_LEVEL=0
+monitor_speed = 115200
+

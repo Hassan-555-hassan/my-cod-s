@@ -1,0 +1,96 @@
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>
+#include <ArduinoJson.h>
+
+// بيانات الاتصال
+const char* ssid = "Galaxy A10s1641";
+const char* password = "1234567890";
+const char* botToken = "7865474124:AAGD3-9Q8zB0NEXl9u9Tk21geITxaFHezb4";
+String authorizedID = "7321197645"; // ضع ID التليجرام الخاص بك هنا
+
+WiFiClientSecure secured_client;
+UniversalTelegramBot bot(botToken, secured_client);
+
+unsigned long lastTimeBotRan;
+const unsigned long botInterval = 1000;
+
+const int relayPin = 2;    // منفذ الريلاي
+const int buttonPin = 4;   // منفذ الزر
+const int ledPin = 2;      // LED الخاص بالبوورد (اختياري)
+
+bool relayState = false;
+bool lastButtonState = HIGH;
+
+void setup() {
+  Serial.begin(115200);
+
+  // تهيئة المنافذ
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH); // تأكد من إيقاف الريلاي فورًا
+  
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(ledPin, OUTPUT); // إعداد LED البوورد (إن وجد)
+
+  // الاتصال بالواي فاي
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    digitalWrite(ledPin, !digitalRead(ledPin)); // وميض LED أثناء الاتصال
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.println(WiFi.localIP());
+  digitalWrite(ledPin, HIGH); // إطفاء LED بعد الاتصال
+
+  secured_client.setInsecure(); // (للتجارب فقط)
+}
+
+void handleNewMessages(int numNewMessages) {
+  for (int i = 0; i < numNewMessages; i++) {
+    String chat_id = String(bot.messages[i].chat_id);
+    String text = bot.messages[i].text;
+
+    if (chat_id != authorizedID) {
+      bot.sendMessage(chat_id, "❌ غير مصرح لك باستخدام هذا البوت.", "");
+      continue;
+    }
+
+    if (text == "/on") {
+      relayState = true;
+      digitalWrite(relayPin, LOW);  // تشغيل الريلاي
+      bot.sendMessage(chat_id, "✅ تم تشغيل الريلاي", "");
+    }
+    else if (text == "/off") {
+      relayState = false;
+      digitalWrite(relayPin, HIGH); // إيقاف الريلاي
+      bot.sendMessage(chat_id, "⛔️ تم إيقاف الريلاي", "");
+    }
+    else if (text == "/status") {
+      String state = relayState ? "تشغيل ✅" : "إيقاف ⛔️";
+      bot.sendMessage(chat_id, "حالة الريلاي: " + state, "");
+    }
+  }
+}
+
+void loop() {
+  // التحكم بالزر
+  bool currentButtonState = digitalRead(buttonPin);
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    relayState = !relayState;
+    digitalWrite(relayPin, relayState ? LOW : HIGH);
+    Serial.println("تم تغيير حالة الريلاي من الزر!");
+    delay(300); // منع الارتداد (Debounce)
+  }
+  lastButtonState = currentButtonState;
+
+  // التحقق من رسائل التليجرام
+  if (millis() - lastTimeBotRan > botInterval) {
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    while (numNewMessages) {
+      handleNewMessages(numNewMessages);
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    }
+    lastTimeBotRan = millis();
+  }
+}

@@ -1,0 +1,74 @@
+#include <BluetoothSerial.h>
+
+// تعريف البلوتوث
+BluetoothSerial BTSerial;
+
+// تعريف دبابيس ESP32
+const int ledPin = 5;       // المحرك الأمامي
+const int motorRight = 4;   // المحرك الأيمن
+const int motorLeft = 15;   // المحرك الأيسر
+const int extraMotorA = 18; // المحرك الإضافي A
+const int extraMotorB = 19; // المحرك الإضافي B
+
+void setup() {
+  // بدء الاتصال بالبلوتوث
+  Serial.begin(115200);
+  BTSerial.begin("ESP32_Light_Control");  // اسم البلوتوث الذي يظهر في الهاتف
+
+  // إعداد دبابيس الإدخال/الإخراج
+  pinMode(ledPin, OUTPUT);
+  pinMode(motorRight, OUTPUT);
+  pinMode(motorLeft, OUTPUT);
+  pinMode(extraMotorA, OUTPUT);
+  pinMode(extraMotorB, OUTPUT);
+
+  Serial.println("Bluetooth is ready to connect...");
+}
+
+void loop() {
+  // فحص إذا كان هناك بيانات واردة من البلوتوث
+  if (BTSerial.available()) {
+    char received = BTSerial.read();  // قراءة البيانات الواردة
+
+    if (received == 'F') {
+      digitalWrite(ledPin, HIGH);
+      digitalWrite(motorRight, LOW);
+      digitalWrite(motorLeft, LOW);
+      Serial.println("F: Forward");
+    }
+    else if (received == 'B') {
+      digitalWrite(motorRight, HIGH);
+      digitalWrite(motorLeft, HIGH);
+      digitalWrite(ledPin, LOW);
+      Serial.println("B: Backward");
+    }
+    else if (received == 'L') {
+      digitalWrite(motorLeft, HIGH);
+      digitalWrite(ledPin, HIGH);
+      digitalWrite(motorRight, LOW);
+      Serial.println("L: Left");
+    }
+    else if (received == 'R') {
+      digitalWrite(motorRight, HIGH);
+      digitalWrite(ledPin, HIGH);
+      digitalWrite(motorLeft, LOW);
+      Serial.println("R: Right");
+    }
+    else if (received == 'A') {
+      digitalWrite(extraMotorA, HIGH);
+      Serial.println("A: Extra Motor A ON");
+    }
+    else if (received == 'D') {
+      digitalWrite(extraMotorB, HIGH);
+      Serial.println("D: Extra Motor B ON");
+    }
+    else if (received == 'S') {
+      digitalWrite(ledPin, LOW);
+      digitalWrite(motorRight, LOW);
+      digitalWrite(motorLeft, LOW);
+      digitalWrite(extraMotorA, LOW);
+      digitalWrite(extraMotorB, LOW);
+      Serial.println("S: Stop All");
+    }
+  }
+}
