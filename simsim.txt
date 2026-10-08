@@ -1,0 +1,196 @@
+// ⚠️ يجب وضع هذين السطرين في أعلى الكود تماماً وقبل استدعاء المكتبات
+#define BLYNK_TEMPLATE_ID   "TMPL6zJdJVvoE"
+#define BLYNK_TEMPLATE_NAME "simsim door"
+
+#define BLYNK_PRINT Serial 
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+const char ssid[] = "SIMSIM.5G";
+const char pass[] = "SIMSIM2024";
+const char auth[] = "THX7PJr3Rn5yZ1v7iOCMFJyZlc0LxPjf";
+
+#define OUT1 5
+#define OUT2 15
+#define OUT3 18
+#define OUT4 23
+#define RESET_BTN 12
+
+const int outputPins[4] = {OUT1, OUT2, OUT3, OUT4};
+unsigned long pinTimers[4] = {0, 0, 0, 0};      
+bool pinStates[4] = {false, false, false, false}; 
+
+const unsigned long TIMEOUT_DURATION = 1200000; // 20 دقيقة
+const unsigned long INTERLOCK_DELAY  = 250;     
+
+unsigned long lastSerialCheck = 0;
+unsigned long lastBlynkConnectTry = 0;
+unsigned long lastWifiRetry = 0;
+
+void updateBlynkApp(int index, bool state) {
+  if (WiFi.status() == WL_CONNECTED && Blynk.connected()) {
+    switch(index) {
+      case 0: Blynk.virtualWrite(V0, state); break;
+      case 1: Blynk.virtualWrite(V1, state); break;
+      case 2: Blynk.virtualWrite(V2, state); break;
+      case 3: Blynk.virtualWrite(V3, state); break;
+    }
+  }
+}
+
+void deactivatePin(int index) {
+  digitalWrite(outputPins[index], LOW); 
+  pinStates[index] = false;
+  pinTimers[index] = 0;
+  
+  Serial.print("[أمان] تم إطفاء المخرج المرتبط بـ Pin ");
+  Serial.print(outputPins[index]);
+  Serial.println(" تلقائياً.");
+
+  updateBlynkApp(index, LOW);
+}
+
+void controlGroupA(int targetPin, bool turnOn) {
+  int index1 = 0; 
+  int index2 = 1; 
+
+  if (turnOn) {
+    if (targetPin == OUT1 && pinStates[index2]) {
+      deactivatePin(index2);
+      delay(INTERLOCK_DELAY);
+    } 
+    else if (targetPin == OUT2 && pinStates[index1]) {
+      deactivatePin(index1);
+      delay(INTERLOCK_DELAY);
+    }
+
+    int activeIndex = (targetPin == OUT1) ? index1 : index2;
+    digitalWrite(targetPin, HIGH); 
+    pinStates[activeIndex] = true;
+    pinTimers[activeIndex] = millis(); 
+    
+    Serial.print("[تشغيل] المجموعة A -> Pin ");
+    Serial.println(targetPin);
+    updateBlynkApp(activeIndex, HIGH);
+  } 
+  else {
+    int activeIndex = (targetPin == OUT1) ? index1 : index2;
+    deactivatePin(activeIndex);
+  }
+}
+
+void controlGroupB(int targetPin, bool turnOn) {
+  int index3 = 2; 
+  int index4 = 3; 
+
+  if (turnOn) {
+    if (targetPin == OUT3 && pinStates[index4]) {
+      deactivatePin(index4);
+      delay(INTERLOCK_DELAY);
+    } 
+    else if (targetPin == OUT4 && pinStates[index3]) {
+      deactivatePin(index3);
+      delay(INTERLOCK_DELAY);
+    }
+
+    int activeIndex = (targetPin == OUT3) ? index3 : index4;
+    digitalWrite(targetPin, HIGH); 
+    pinStates[activeIndex] = true;
+    pinTimers[activeIndex] = millis();
+    
+    Serial.print("[تشغيل] المجموعة B -> Pin ");
+    Serial.println(targetPin);
+    updateBlynkApp(activeIndex, HIGH);
+  } 
+  else {
+    int activeIndex = (targetPin == OUT3) ? index3 : index4;
+    deactivatePin(activeIndex);
+  }
+}
+
+BLYNK_WRITE(V0) { controlGroupA(OUT1, param.asInt() == HIGH); }
+BLYNK_WRITE(V1) { controlGroupA(OUT2, param.asInt() == HIGH); }
+BLYNK_WRITE(V2) { controlGroupB(OUT3, param.asInt() == HIGH); }
+BLYNK_WRITE(V3) { controlGroupB(OUT4, param.asInt() == HIGH); }
+
+// ◄ تعديل الأمان الفائق لـ عودة الإنترنت ►
+BLYNK_CONNECTED() {
+  Serial.println("[BLYNK] تم الاتصال بالسيرفر! جاري فرض حالة اللوحة الواقعية على التطبيق لمنع التشغيل العشوائي...");
+  // نقوم بتحديث أزرار الهاتف لتطابق حالة اللوحة الحقيقية في هذه اللحظة
+  updateBlynkApp(0, pinStates[0]);
+  updateBlynkApp(1, pinStates[1]);
+  updateBlynkApp(2, pinStates[2]);
+  updateBlynkApp(3, pinStates[3]);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("\n--- بدء تشغيل النظام الذكي الفائق ---");
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(outputPins[i], OUTPUT);
+    digitalWrite(outputPins[i], LOW); 
+  }
+  pinMode(RESET_BTN, INPUT_PULLUP);
+
+  WiFi.disconnect(true); 
+  delay(100);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true); 
+  WiFi.setSleep(false); 
+
+  Serial.println("[WIFI] جاري بث طلب الاتصال بالشبكة بثبات...");
+  WiFi.begin(ssid, pass);
+
+  Blynk.config(auth);
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Blynk.run();
+  }
+
+  // 1. الفحص الذكي ثانية بثانية
+  if (currentMillis - lastSerialCheck >= 1000) {
+    lastSerialCheck = currentMillis;
+    
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("[WIFI] إشارة حرجة أو بعيدة.. جاري محاولة صيد الشبكة تلقائياً...");
+      
+      if (currentMillis - lastWifiRetry >= 15000) {
+        lastWifiRetry = currentMillis;
+        Serial.println("[WIFI] إنعاش طلب الاتصال بالقوة...");
+        WiFi.begin(ssid, pass); 
+      }
+    } 
+    else {
+      if (!Blynk.connected() && (currentMillis - lastBlynkConnectTry >= 10000)) {
+        lastBlynkConnectTry = currentMillis;
+        Serial.println("[BLYNK] الواي فاي جاهز، جاري محاولة ربط السيرفر لـ 300ms...");
+        Blynk.connect(300); 
+      }
+    }
+  }
+
+  // 2. الفحص الإجباري لمؤقت الـ 20 دقيقة لكل مخرج
+  for (int i = 0; i < 4; i++) {
+    if (pinStates[i] && (currentMillis - pinTimers[i] >= TIMEOUT_DURATION)) {
+      Serial.print("[مؤقت إجباري] فصل تلقائي للمخرج: ");
+      Serial.println(outputPins[i]);
+      deactivatePin(i); 
+    }
+  }
+
+  // 3. زر الطوارئ لإعادة التشغيل اليدوي
+  if (digitalRead(RESET_BTN) == LOW) {
+    delay(500);
+    if (digitalRead(RESET_BTN) == LOW) {
+      Serial.println("[RESET] إعادة إقلاع شاملة للوحة التحكم...");
+      ESP.restart();
+    }
+  }
+}
